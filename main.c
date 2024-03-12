@@ -108,6 +108,14 @@ extern char *basis_dir[MAX_BASIS_DIRS+1];
 extern struct file_list *first_flist;
 extern filter_rule_list daemon_filter_list, implied_filter_list;
 
+extern char *recovery_version; // 用户要恢复的版本号 YYYY-mm-dd-HH:MM:SS 需要传给sender模块恢复至指定版本
+extern char *backup_version;   // 用户指定的的备份版本号 YYYY-mm-dd-HH:MM:SS 需要传给receiver模块恢复至指定版本
+
+extern int backup_type;		   // 备份类型 0:增量备份 1:差量备份
+extern int backup_version_num; // 存储端保留的备份版本数目
+
+int source_is_remote_or_local = -1; // 解析命令定位待操作文件，本地文件时source_is_remote_or_local = 0，远程文件时source_is_remote_or_local = 1
+
 uid_t our_uid;
 gid_t our_gid;
 int am_receiver = 0;  /* Only set to 1 after the receiver/generator fork. */

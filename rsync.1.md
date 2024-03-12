@@ -559,8 +559,17 @@ has its own detailed description later in this manpage.
 --ipv4, -4               prefer IPv4
 --ipv6, -6               prefer IPv6
 --version, -V            print the version + other info and exit
+
+--backup_version=TIME    specify the version of the file to be backuped
+--recovery_version=TIME  specify the version of the file to be recovered
+--backup_type=0/1        specify the type of backup, 0 for incremental backup, 1 for differental backup
+--backup_version_num=NUM specify the number of backup version
+
 --help, -h (*)           show this help (* -h is help only on its own)
 ```
+
+<!-- --help, -h (*)           show this help (* -h is help only on its own) -->
+
 
 Rsync can also be run as a daemon, in which case the following options are
 accepted:
