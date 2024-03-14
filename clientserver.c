@@ -99,6 +99,15 @@ static item_list gid_list = EMPTY_ITEM_LIST;
 /* Used when "reverse lookup" is off. */
 const char undetermined_hostname[] = "UNDETERMINED";
 
+extern char *recovery_version; // 用户要恢复的版本号 YYYY-mm-dd-HH:MM:SS 需要传给sender模块恢复至指定版本
+extern char *backup_version;   // 用户指定的的备份版本号 YYYY-mm-dd-HH:MM:SS 需要传给receiver模块恢复至指定版本
+
+extern char *backup_type;		 // 备份类型 0:增量备份 1:差量备份
+extern char *backup_version_num; // 存储端保留的备份版本数目
+
+extern int is_backup;	// 是否是备份操作
+extern int is_recovery; // 是否是恢复操作
+
 /**
  * Run a client connected to an rsyncd.  The alternative to this
  * function for remote-shell connections is do_cmd().
@@ -118,6 +127,16 @@ int start_socket_client(char *host, int remote_argc, char *remote_argv[],
 {
 	int fd, ret;
 	char *p, *user = NULL;
+
+	if(DEBUG_GTE(CMD, 1))
+	{
+		int i;
+		rprintf(FINFO, "[debug-yee](%s)(clientserver.c->start_socket_client) host = %s\n", who_am_i(), host);
+		for (i = 0; i < remote_argc; i++)
+			rprintf(FINFO, "[debug-yee](%s)(clientserver.c->start_socket_client) remote_argv[%d] = %s\n", who_am_i(), i, remote_argv[i]);
+		for (i = 0; i < argc; i++)
+			rprintf(FINFO, "[debug-yee](%s)(clientserver.c->start_socket_client) argv[%d] = %s\n", who_am_i(), i, argv[i]);
+	}
 
 	/* This is redundant with code in start_inband_exchange(), but this
 	 * short-circuits a problem in the client before we open a socket,
@@ -143,6 +162,16 @@ int start_socket_client(char *host, int remote_argc, char *remote_argv[],
 #endif
 
 	ret = start_inband_exchange(fd, fd, user, remote_argc, remote_argv);
+	
+	if(DEBUG_GTE(CMD, 1))
+	{
+		rprintf(FINFO, "[debug-yee](%s)(clientserver.c->start_socket_client) after inband_exchange argc = %d\n", who_am_i(), argc);
+		for(int i = 0; i < argc; i++)
+		{
+			rprintf(FINFO, "[debug-yee](%s)(clientserver.c->start_socket_client) after inband_exchange argv[%d] = %s\n", who_am_i(), i, argv[i]);
+		}
+		rprintf(FINFO, "[debug-yee](%s)(clientserver.c->start_socket_client) after inband_exchange ret = %d\n", who_am_i(), ret);
+	}
 
 	return ret ? ret : client_run(fd, fd, -1, argc, argv);
 }
@@ -293,12 +322,25 @@ int start_inband_exchange(int f_in, int f_out, const char *user, int argc, char 
 		fclose(f);
 	}
 
+	/** 生成服务端参数
+	 * sending daemon args: --server -vvvlogDtpre.iLsfxCIvu . backup/test312/  (4 args)
+	 * 前两个参数为server_options()解析生成
+	 */
 	server_options(sargs, &sargc);
 
 	if (sargc >= MAX_ARGS - 2)
 		goto arg_overflow;
 
 	sargs[sargc++] = ".";
+
+	if(DEBUG_GTE(CMD, 1))
+	{
+		rprintf(FINFO, "[yee-debug](%s)(clientserver.c->start_inband_exchange) 处理前 sargc = %d\n", who_am_i(), sargc);
+		for(int i = 0; i < sargc; i++)
+		{
+			rprintf(FINFO, "[yee-debug](%s)(clientserver.c->start_inband_exchange) 处理前 sargv[%d] = %s\n", who_am_i(), i, sargs[i]);
+		}
+	}
 
 	if (!old_style_args)
 		snprintf(line, sizeof line, " %.*s/", modlen, modname);
@@ -343,7 +385,28 @@ int start_inband_exchange(int f_in, int f_out, const char *user, int argc, char 
 		argc--;
 	}
 
+	if (is_recovery == 1 && recovery_version != NULL)		// 还原任务	将还原版本加入参数
+	{
+		sargs[sargc++] = recovery_version;
+	}
+
+	if (is_backup == 1 && backup_version != NULL)		// 备份任务 将备份版本加入参数
+	{
+		sargs[sargc++] = backup_type;
+		sargs[sargc++] = backup_version_num;
+		sargs[sargc++] = backup_version;
+	}
+
 	sargs[sargc] = NULL;
+
+	if(DEBUG_GTE(CMD, 1))
+	{
+		rprintf(FINFO, "[yee-debug](%s)(clientserver.c->start_inband_exchange) 处理后 sargc = %d\n", who_am_i(), sargc);
+		for(int i = 0; i < sargc; i++)
+		{
+			rprintf(FINFO, "[yee-debug](%s)(clientserver.c->start_inband_exchange) 处理后  sargv[%d] = %s\n", who_am_i(), i, sargs[i]);
+		}
+	}
 
 	if (DEBUG_GTE(CMD, 1))
 		print_child_argv("sending daemon args:", sargs);
@@ -1527,7 +1590,7 @@ int daemon_main(void)
 
 	log_init(0);
 
-	rprintf(FLOG, "rsyncd version %s starting, listening on port %d\n",
+	rprintf(FINFO, "rsyncd version %s starting, listening on port %d\n",
 		rsync_version(), rsync_port);
 	/* TODO: If listening on a particular address, then show that
 	 * address too.  In fact, why not just do getnameinfo on the

@@ -190,14 +190,14 @@ int rsync_port = 0;
 int alt_dest_type = 0;
 int basis_dir_cnt = 0;
 
-char *recovery_version = NULL;		// 用户要恢复的版本号 YYYY-mm-dd-HH:MM:SS 需要传给sender模块恢复至指定版本
-char *backup_version = NULL;		// 用户指定的的备份版本号 YYYY-mm-dd-HH:MM:SS 需要传给receiver模块恢复至指定版本
+char *recovery_version = NULL; // 用户要恢复的版本号 YYYY-mm-dd-HH:MM:SS 需要传给sender模块恢复至指定版本
+char *backup_version = NULL;   // 用户指定的的备份版本号 YYYY-mm-dd-HH:MM:SS 需要传给receiver模块恢复至指定版本
 
-int backup_type = -1;				// 备份类型 0:增量备份 1:差量备份
-int backup_version_num = 0;			// 存储端保留的备份版本数目
+char *backup_type = NULL;		 // 备份类型 0:增量备份 1:差量备份
+char *backup_version_num = NULL; // 存储端保留的备份版本数目
 
-int is_backup = 0;				// 是否是备份操作	
-int is_recovery = 0;			// 是否是恢复操作
+int is_backup = 0;	 // 是否是备份操作
+int is_recovery = 0; // 是否是恢复操作
 
 #define DEFAULT_MAX_ALLOC (1024L * 1024 * 1024)
 size_t max_alloc = DEFAULT_MAX_ALLOC;
@@ -600,8 +600,8 @@ static struct poptOption long_options[] = {
   /* longName, shortName, argInfo, argPtr, value, descrip, argDesc */
   {"recovery_version", 0,  POPT_ARG_STRING, &recovery_version, 0, 0, 0},
   {"backup_version",   0,  POPT_ARG_STRING, &backup_version, 0, 0, 0},
-  {"backup_type",	   0,  POPT_ARG_INT,	&backup_type, 0, 0, 0},
-  {"backup_version_num", 0,POPT_ARG_INT, 	&backup_version_num, 0, 0, 0},
+  {"backup_type",	   0,  POPT_ARG_STRING,	&backup_type, 0, 0, 0},
+  {"backup_version_num", 0,POPT_ARG_STRING, &backup_version_num, 0, 0, 0},
 
   {"help",             0,  POPT_ARG_NONE,   0, OPT_HELP, 0, 0 },
   {"version",         'V', POPT_ARG_NONE,   0, 'V', 0, 0},
@@ -2516,17 +2516,17 @@ int parse_arguments(int *argc_p, const char ***argv_p)
 	{
 		is_backup = 1;
 		if(verbose > 1)
-			rprintf(FWARNING,"[debug-yee](option.c->parse_arguments) backup_version %s\n", backup_version);
+			rprintf(FINFO,"[debug-yee](%s)(option.c->parse_arguments) backup_version %s\n", who_am_i(), backup_version);
 	}
 	if (recovery_version != NULL)
 	{
 		is_recovery = 1;
 		if(verbose > 1)
-			rprintf(FWARNING,"[debug-yee](option.c->parse_arguments) recovery_version %s\n", recovery_version);
+			rprintf(FINFO,"[debug-yee](%s)(option.c->parse_arguments) recovery_version %s\n", who_am_i(), recovery_version);
 	}
 
 	if(verbose > 1)
-		rprintf(FWARNING,"[debug-yee](option.c->parse_arguments) is_backup %d, is_recovery %d\n", is_backup, is_recovery);
+		rprintf(FINFO,"[debug-yee](%s)(option.c->parse_arguments) is_backup %d, is_recovery %d\n", who_am_i(), is_backup, is_recovery);
 
 	return 1;
 
@@ -2622,6 +2622,15 @@ void server_options(char **args, int *argc_p)
 	uchar where;
 	char *arg;
 	int i, x;
+
+	if(DEBUG_GTE(CMD, 1))
+	{
+		rprintf(FINFO,"[debug-yee](%s)(option.c->server_options) argc_p %d\n", who_am_i(), *argc_p);
+		for(int i = 0; i < *argc_p; i++)
+		{
+			rprintf(FINFO,"[debug-yee](%s)(option.c->server_options) args[%d] %s\n", who_am_i(), i, args[i]);
+		}
+	}
 
 	/* This should always remain first on the server's command-line. */
 	args[ac++] = "--server";
@@ -3024,7 +3033,29 @@ void server_options(char **args, int *argc_p)
 			args[ac++] = safe_arg(SPLIT_ARG_WHEN_OLD, remote_options[j]);
 	}
 
+	// if(is_backup)
+	// {
+	// 	args[ac++] = backup_type;
+	// 	args[ac++] = backup_version_num;
+	// 	args[ac++] = backup_version;
+
+	// }
+	// if(is_recovery)
+	// {
+	// 	args[ac++] = recovery_version;
+	// }
+
 	*argc_p = ac;
+
+	if(DEBUG_GTE(CMD, 1))
+	{
+		rprintf(FINFO,"[debug-yee](%s)(option.c->server_options) argc_p %d\n", who_am_i(), *argc_p);
+		for(int i = 0; i < *argc_p; i++)
+		{
+			rprintf(FINFO,"[debug-yee](%s)(option.c->server_options) args[%d] %s\n", who_am_i(), i, args[i]);
+		}
+	}
+
 	return;
 
     oom:
@@ -3073,6 +3104,7 @@ int maybe_add_e_option(char *buf, int buf_len)
 	}
 
 	buf[x] = '\0';
+
 
 	return x;
 }

@@ -111,10 +111,11 @@ extern filter_rule_list daemon_filter_list, implied_filter_list;
 extern char *recovery_version; // 用户要恢复的版本号 YYYY-mm-dd-HH:MM:SS 需要传给sender模块恢复至指定版本
 extern char *backup_version;   // 用户指定的的备份版本号 YYYY-mm-dd-HH:MM:SS 需要传给receiver模块恢复至指定版本
 
-extern int backup_type;		   // 备份类型 0:增量备份 1:差量备份
-extern int backup_version_num; // 存储端保留的备份版本数目
+extern char *backup_type;		 // 备份类型 0:增量备份 1:差量备份
+extern char *backup_version_num; // 存储端保留的备份版本数目
 
-int source_is_remote_or_local = -1; // 解析命令定位待操作文件，本地文件时source_is_remote_or_local = 0，远程文件时source_is_remote_or_local = 1
+extern int is_backup;	// 是否是备份操作
+extern int is_recovery; // 是否是恢复操作
 
 uid_t our_uid;
 gid_t our_gid;
@@ -915,6 +916,21 @@ static void read_final_goodbye(int f_in, int f_out)
 
 static void do_server_sender(int f_in, int f_out, int argc, char *argv[])
 {
+	if(DEBUG_GTE(CMD,1))
+	{
+		for(int i = 0; i < argc; i++)
+		{
+			rprintf(FINFO, "[debug-yee](%s)(main.c->do_server_sender) argv[%d] = %s\n", who_am_i(), i, argv[i]);
+		}
+	}
+
+	if(is_backup)
+	{
+		backup_version = argv[--argc];
+		backup_version_num = argv[--argc];
+		backup_type = argv[--argc];
+	}
+
 	struct file_list *flist;
 	char *dir;
 
@@ -1137,10 +1153,23 @@ static int do_recv(int f_in, int f_out, char *local_name)
 
 static void do_server_recv(int f_in, int f_out, int argc, char *argv[])
 {
+	if(DEBUG_GTE(CMD, 1))
+	{
+		for(int i = 0; i < argc; i++)
+		{
+			rprintf(FINFO, "[debug-yee](%s)(main.c->do_server_recv) argv[%d] = %s\n", who_am_i(), i, argv[i]);
+		}
+	}
+
 	int exit_code;
 	struct file_list *flist;
 	char *local_name = NULL;
 	int negated_levels;
+
+	if (is_recovery)
+	{
+		recovery_version = argv[--argc];
+	}
 
 	if (filesfrom_fd >= 0 && msgs2stderr != 1 && protocol_version < 31) {
 		/* We can't mix messages with files-from data on the socket,
@@ -1274,6 +1303,13 @@ void start_server(int f_in, int f_out, int argc, char *argv[])
  * for rsyncd, remote-shell, and local connections. */
 int client_run(int f_in, int f_out, pid_t pid, int argc, char *argv[])
 {
+	if(DEBUG_GTE(CMD, 1))
+	{
+		for(int i = 0; i < argc; i++)
+		{
+			rprintf(FINFO, "[debug-yee](%s)(main.c->client_run) argv[%d] = %s\n", who_am_i(), i, argv[i]);
+		}
+	}
 	struct file_list *flist = NULL;
 	int exit_code = 0, exit_code2 = 0;
 	char *local_name = NULL;
@@ -1408,6 +1444,10 @@ static int start_client(int argc, char *argv[])
 
 	if (!read_batch) { /* for read_batch, NO source is specified */
 		char *path = check_for_hostspec(argv[0], &shell_machine, &rsync_port);
+
+		if (DEBUG_GTE(CMD, 1))
+			rprintf(FINFO, "[debug-yee](%s)(main.c->start_client) path = %s\n", who_am_i(), path);
+
 		if (path) { /* source is remote */
 			char *dummy_host;
 			int dummy_port = 0;
@@ -1540,6 +1580,43 @@ static int start_client(int argc, char *argv[])
 		}
 	}
 
+	if(DEBUG_GTE(CMD, 1))
+	{
+		for(int i = 0; i < remote_argc; i++)
+		{
+			rprintf(FINFO, "[debug-yee](%s)(main.c->start_client) pre remote_argv[%d] = %s\n", who_am_i(), i, remote_argv[i]);
+		}
+		for(int i = 0; i < argc; i++)
+		{
+			rprintf(FINFO, "[debug-yee](%s)(main.c->start_client) pre argv[%d] = %s\n", who_am_i(), i, argv[i]);
+		}
+	}
+
+	// if(is_backup)
+	// {
+	// 	remote_argv[remote_argc++] = backup_type;
+	// 	remote_argv[remote_argc++] = backup_version_num;
+	// 	remote_argv[remote_argc++] = backup_version;	 
+	// }
+	// else if(is_recovery)
+	// {
+	// 	remote_argv[remote_argc++] = recovery_version;
+	// }
+
+	remote_argv[remote_argc] = NULL;
+	
+	if(DEBUG_GTE(CMD, 1))
+	{
+		for(int i = 0; i < remote_argc; i++)
+		{
+			rprintf(FINFO, "[debug-yee](%s)(main.c->start_client) after remote_argv[%d] = %s\n", who_am_i(), i, remote_argv[i]);
+		}
+		for(int i = 0; i < argc; i++)
+		{
+			rprintf(FINFO, "[debug-yee](%s)(main.c->start_client) after argv[%d] = %s\n", who_am_i(), i, argv[i]);
+		}
+	}
+
 	if (rsync_port < 0)
 		rsync_port = RSYNC_PORT;
 	else
@@ -1591,6 +1668,15 @@ static int start_client(int argc, char *argv[])
 		tmpret = start_inband_exchange(f_in, f_out, shell_user, remote_argc, remote_argv);
 		if (tmpret < 0)
 			return tmpret;
+	}
+
+	if(DEBUG_GTE(CMD, 1))
+	{
+		rprintf(FINFO, "[debug-yee](%s)(main.c->start_client) after inband_exchange argc = %d\n", who_am_i(), argc);
+		for(int i = 0; i < argc; i++)
+		{
+			rprintf(FINFO, "[debug-yee](%s)(main.c->start_client) before client_run argv[%d] = %s\n", who_am_i(), i, argv[i]);
+		}
 	}
 
 	ret = client_run(f_in, f_out, pid, argc, argv);
@@ -1806,6 +1892,19 @@ int main(int argc,char *argv[])
 #ifdef SIGXFSZ
 	SIGACTION(SIGXFSZ, SIG_IGN);
 #endif
+
+	if (DEBUG_GTE(CMD, 1))
+	{
+		rprintf(FINFO, "[debug-yee](%s)(main.c->main) is_backup %d, is_recovery %d\n", who_am_i(), is_backup, is_recovery);
+		if (is_backup)
+		{
+			rprintf(FINFO, "[debug-yee](%s)(main.c->main) backup_version %s, backup_version_num = %s, backup_type = %s\n", who_am_i(), backup_version, backup_version_num, backup_type);
+		}
+		else if (is_recovery)
+		{
+			rprintf(FINFO, "[debug-yee](%s)(main.c->main) recovery_version %s\n", who_am_i(), recovery_version);
+		}
+	}
 
 	/* Initialize change_dir() here because on some old systems getcwd
 	 * (implemented by forking "pwd" and reading its output) doesn't
