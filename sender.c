@@ -54,6 +54,17 @@ extern struct stats stats;
 extern struct file_list *cur_flist, *first_flist, *dir_flist;
 extern char num_dev_ino_buf[4 + 8 + 8];
 
+extern char *recovery_version; // 用户要恢复的版本号 YYYY-mm-dd-HH:MM:SS 需要传给sender模块恢复至指定版本
+extern char *backup_version;   // 用户指定的的备份版本号 YYYY-mm-dd-HH:MM:SS 需要传给receiver模块恢复至指定版本
+
+extern char *backup_type;		 // 备份类型 0:增量备份 1:差量备份
+extern char *backup_version_num; // 存储端保留的备份版本数目
+
+extern int is_backup;	// 是否是备份操作
+extern int is_recovery; // 是否是恢复操作
+
+int recovery_type = -1;	// 0 使用增量备份文件, 1 使用差量备份文件
+
 BOOL extra_flist_sending_enabled;
 
 /**
@@ -272,8 +283,14 @@ void send_files(int f_in, int f_out)
 			continue;
 		f_name(file, fname);
 
+		/**
+		 * 以上完成待备份文件的路径解析
+		 * @param path 路径名
+		 * @param slash 斜杠号
+		 * @param fname 文件名
+		*/
 		if (DEBUG_GTE(SEND, 1))
-			rprintf(FINFO, "send_files(%d, %s%s%s)\n", ndx, path,slash,fname);
+			rprintf(FINFO, "send_files(%d, %s|%s|%s)\n", ndx, path,slash,fname);
 
 #ifdef SUPPORT_XATTRS
 		if (preserve_xattrs && iflags & ITEM_REPORT_XATTR && do_xfers

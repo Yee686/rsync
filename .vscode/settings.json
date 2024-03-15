@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "rsync.h": "c",
+        "inums.h": "c",
+        "ifuncs.h": "c"
+    }
+}
