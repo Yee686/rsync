@@ -54,6 +54,7 @@ extern struct stats stats;
 extern struct file_list *cur_flist, *first_flist, *dir_flist;
 extern char num_dev_ino_buf[4 + 8 + 8];
 
+
 extern char *recovery_version; // 用户要恢复的版本号 YYYY-mm-dd-HH:MM:SS 需要传给sender模块恢复至指定版本
 extern char *backup_version;   // 用户指定的的备份版本号 YYYY-mm-dd-HH:MM:SS 需要传给receiver模块恢复至指定版本
 
@@ -64,6 +65,7 @@ extern int is_backup;	// 是否是备份操作
 extern int is_recovery; // 是否是恢复操作
 
 int recovery_type = -1;	// 0 使用增量备份文件, 1 使用差量备份文件
+
 
 BOOL extra_flist_sending_enabled;
 

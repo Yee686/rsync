@@ -128,15 +128,15 @@ int start_socket_client(char *host, int remote_argc, char *remote_argv[],
 	int fd, ret;
 	char *p, *user = NULL;
 
-	if(DEBUG_GTE(CMD, 1))
-	{
-		int i;
-		rprintf(FINFO, "[debug-yee](%s)(clientserver.c->start_socket_client) host = %s\n", who_am_i(), host);
-		for (i = 0; i < remote_argc; i++)
-			rprintf(FINFO, "[debug-yee](%s)(clientserver.c->start_socket_client) remote_argv[%d] = %s\n", who_am_i(), i, remote_argv[i]);
-		for (i = 0; i < argc; i++)
-			rprintf(FINFO, "[debug-yee](%s)(clientserver.c->start_socket_client) argv[%d] = %s\n", who_am_i(), i, argv[i]);
-	}
+	// if(DEBUG_GTE(CMD, 1))
+	// {
+	// 	int i;
+	// 	rprintf(FINFO, "[debug-yee](%s)(clientserver.c->start_socket_client) host = %s\n", who_am_i(), host);
+	// 	for (i = 0; i < remote_argc; i++)
+	// 		rprintf(FINFO, "[debug-yee](%s)(clientserver.c->start_socket_client) remote_argv[%d] = %s\n", who_am_i(), i, remote_argv[i]);
+	// 	for (i = 0; i < argc; i++)
+	// 		rprintf(FINFO, "[debug-yee](%s)(clientserver.c->start_socket_client) argv[%d] = %s\n", who_am_i(), i, argv[i]);
+	// }
 
 	/* This is redundant with code in start_inband_exchange(), but this
 	 * short-circuits a problem in the client before we open a socket,
@@ -163,15 +163,15 @@ int start_socket_client(char *host, int remote_argc, char *remote_argv[],
 
 	ret = start_inband_exchange(fd, fd, user, remote_argc, remote_argv);
 	
-	if(DEBUG_GTE(CMD, 1))
-	{
-		rprintf(FINFO, "[debug-yee](%s)(clientserver.c->start_socket_client) after inband_exchange argc = %d\n", who_am_i(), argc);
-		for(int i = 0; i < argc; i++)
-		{
-			rprintf(FINFO, "[debug-yee](%s)(clientserver.c->start_socket_client) after inband_exchange argv[%d] = %s\n", who_am_i(), i, argv[i]);
-		}
-		rprintf(FINFO, "[debug-yee](%s)(clientserver.c->start_socket_client) after inband_exchange ret = %d\n", who_am_i(), ret);
-	}
+	// if(DEBUG_GTE(CMD, 1))
+	// {
+	// 	rprintf(FINFO, "[debug-yee](%s)(clientserver.c->start_socket_client) after inband_exchange argc = %d\n", who_am_i(), argc);
+	// 	for(int i = 0; i < argc; i++)
+	// 	{
+	// 		rprintf(FINFO, "[debug-yee](%s)(clientserver.c->start_socket_client) after inband_exchange argv[%d] = %s\n", who_am_i(), i, argv[i]);
+	// 	}
+	// 	rprintf(FINFO, "[debug-yee](%s)(clientserver.c->start_socket_client) after inband_exchange ret = %d\n", who_am_i(), ret);
+	// }
 
 	return ret ? ret : client_run(fd, fd, -1, argc, argv);
 }
@@ -333,14 +333,14 @@ int start_inband_exchange(int f_in, int f_out, const char *user, int argc, char 
 
 	sargs[sargc++] = ".";
 
-	if(DEBUG_GTE(CMD, 1))
-	{
-		rprintf(FINFO, "[yee-debug](%s)(clientserver.c->start_inband_exchange) 处理前 sargc = %d\n", who_am_i(), sargc);
-		for(int i = 0; i < sargc; i++)
-		{
-			rprintf(FINFO, "[yee-debug](%s)(clientserver.c->start_inband_exchange) 处理前 sargv[%d] = %s\n", who_am_i(), i, sargs[i]);
-		}
-	}
+	// if(DEBUG_GTE(CMD, 1))
+	// {
+	// 	rprintf(FINFO, "[yee-debug](%s)(clientserver.c->start_inband_exchange) 处理前 sargc = %d\n", who_am_i(), sargc);
+	// 	for(int i = 0; i < sargc; i++)
+	// 	{
+	// 		rprintf(FINFO, "[yee-debug](%s)(clientserver.c->start_inband_exchange) 处理前 sargv[%d] = %s\n", who_am_i(), i, sargs[i]);
+	// 	}
+	// }
 
 	if (!old_style_args)
 		snprintf(line, sizeof line, " %.*s/", modlen, modname);
@@ -397,16 +397,19 @@ int start_inband_exchange(int f_in, int f_out, const char *user, int argc, char 
 		sargs[sargc++] = backup_version;
 	}
 
+	// rprintf(FINFO, "[debug-yee](%s)(clientserver.c->start_inband_exchange) is_backup = %d, is_recovery = %d\n", who_am_i(), is_backup, is_recovery);
+	// rprintf(FINFO, "[debug-yee](%s)(clientserver.c->start_inband_exchange) backup_version = %s, backup_veriosn_num = %s, backup_type = %s\n", who_am_i(), backup_version, backup_version_num, backup_type);
+
 	sargs[sargc] = NULL;
 
-	if(DEBUG_GTE(CMD, 1))
-	{
-		rprintf(FINFO, "[yee-debug](%s)(clientserver.c->start_inband_exchange) 处理后 sargc = %d\n", who_am_i(), sargc);
-		for(int i = 0; i < sargc; i++)
-		{
-			rprintf(FINFO, "[yee-debug](%s)(clientserver.c->start_inband_exchange) 处理后  sargv[%d] = %s\n", who_am_i(), i, sargs[i]);
-		}
-	}
+	// if(DEBUG_GTE(CMD, 1))
+	// {
+	// 	rprintf(FINFO, "[yee-debug](%s)(clientserver.c->start_inband_exchange) 处理后 sargc = %d\n", who_am_i(), sargc);
+	// 	for(int i = 0; i < sargc; i++)
+	// 	{
+	// 		rprintf(FINFO, "[yee-debug](%s)(clientserver.c->start_inband_exchange) 处理后  sargv[%d] = %s\n", who_am_i(), i, sargs[i]);
+	// 	}
+	// }
 
 	if (DEBUG_GTE(CMD, 1))
 		print_child_argv("sending daemon args:", sargs);

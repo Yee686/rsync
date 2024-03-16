@@ -11,9 +11,9 @@
             "program": "/usr/local/bin/rsync",
             "args": [
                 "-avvv",
-                "/usr/yzy/rsync/dev/test/",
-                "rsync_backup@172.25.162.117::backup/test312/",
-                "--password-file=/rsync.password",
+                "/home/yee/rsync/dev/test",
+                "rsync_backup@192.168.114.152::backup/test312/",
+                "--password-file=/rsync.passwd",
                 "--port=873",
                 "--backup_type=0",
                 "--backup_version_num=10",

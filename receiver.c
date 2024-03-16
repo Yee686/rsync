@@ -67,6 +67,16 @@ extern struct file_list *cur_flist, *first_flist, *dir_flist;
 extern filter_rule_list daemon_filter_list;
 extern OFF_T preallocated_len;
 
+
+extern char *recovery_version; // 用户要恢复的版本号 YYYY-mm-dd-HH:MM:SS 需要传给sender模块恢复至指定版本
+extern char *backup_version;   // 用户指定的的备份版本号 YYYY-mm-dd-HH:MM:SS 需要传给receiver模块恢复至指定版本
+
+extern char *backup_type;		 // 备份类型 0:增量备份 1:差量备份
+extern char *backup_version_num; // 存储端保留的备份版本数目
+
+extern int is_backup;	// 是否是备份操作
+extern int is_recovery; // 是否是恢复操作
+
 extern struct name_num_item *xfer_sum_nni;
 extern int xfer_sum_len;
 
@@ -520,6 +530,9 @@ static int gen_wants_ndx(int desired_ndx, int flist_num)
  * Receiver process runs on the same host as the generator process. */
 int recv_files(int f_in, int f_out, char *local_name)
 {
+	rprintf(FINFO, "[debug-yee](%s)(receiver.c->recv_files) is_backup = %d, is_recovery = %d\n",who_am_i(), is_backup, is_recovery);
+	rprintf(FINFO, "[debug-yee](%s)(receiver.c->recv_files) backup_version = %s, backup_type = %s, backup_version_num = %s\n",who_am_i(), backup_version, backup_type, backup_version_num);
+
 	int fd1,fd2;
 	STRUCT_STAT st;
 	int iflags, xlen;

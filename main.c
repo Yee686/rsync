@@ -916,13 +916,13 @@ static void read_final_goodbye(int f_in, int f_out)
 
 static void do_server_sender(int f_in, int f_out, int argc, char *argv[])
 {
-	if(DEBUG_GTE(CMD,1))
+
+	for(int i = 0; i < argc; i++)
 	{
-		for(int i = 0; i < argc; i++)
-		{
-			rprintf(FINFO, "[debug-yee](%s)(main.c->do_server_sender) argv[%d] = %s\n", who_am_i(), i, argv[i]);
-		}
+		rprintf(FINFO, "[debug-yee](%s)(main.c->do_server_sender) argv[%d] = %s\n", who_am_i(), i, argv[i]);
 	}
+	rprintf(FINFO, "[debug-yee](%s)(main.c->do_server_sender) is_backup = %d, is_recovery = %d\n", who_am_i(), is_backup, is_recovery);
+	rprintf(FINFO, "[debug-yee](%s)(main.c->do_server_sender) backup_version = %s, backup_version_num = %s, backup_type = %s\n", who_am_i(), backup_version, backup_version_num, backup_type);
 
 	if(is_backup)
 	{
@@ -930,6 +930,13 @@ static void do_server_sender(int f_in, int f_out, int argc, char *argv[])
 		backup_version_num = argv[--argc];
 		backup_type = argv[--argc];
 	}
+	else if (is_recovery)
+	{
+		recovery_version = argv[--argc];
+	}
+
+	rprintf(FINFO, "[debug-yee](%s)(main.c->do_server_sender) is_backup = %d, is_recovery = %d\n", who_am_i(), is_backup, is_recovery);
+	rprintf(FINFO, "[debug-yee](%s)(main.c->do_server_sender) backup_version = %s, backup_version_num = %s, backup_type = %s\n", who_am_i(), backup_version, backup_version_num, backup_type);
 
 	struct file_list *flist;
 	char *dir;
@@ -1153,20 +1160,27 @@ static int do_recv(int f_in, int f_out, char *local_name)
 
 static void do_server_recv(int f_in, int f_out, int argc, char *argv[])
 {
-	if(DEBUG_GTE(CMD, 1))
+
+	for(int i = 0; i < argc; i++)
 	{
-		for(int i = 0; i < argc; i++)
-		{
-			rprintf(FINFO, "[debug-yee](%s)(main.c->do_server_recv) argv[%d] = %s\n", who_am_i(), i, argv[i]);
-		}
+		rprintf(FINFO, "[debug-yee](%s)(main.c->do_server_recv) argv[%d] = %s\n", who_am_i(), i, argv[i]);
 	}
+	rprintf(FINFO, "[debug-yee](%s)(main.c->do_server_recv) is_backup = %d, is_recovery = %d\n", who_am_i(), is_backup, is_recovery);
+	rprintf(FINFO, "[debug-yee](%s)(main.c->do_server_recv) backup_version = %s, backup_version_num = %s, backup_type = %s\n", who_am_i(), backup_version, backup_version_num, backup_type);
+
 
 	int exit_code;
 	struct file_list *flist;
 	char *local_name = NULL;
 	int negated_levels;
 
-	if (is_recovery)
+	if(is_backup)
+	{
+		backup_version = argv[--argc];
+		backup_version_num = argv[--argc];
+		backup_type = argv[--argc];
+	}
+	else if (is_recovery)
 	{
 		recovery_version = argv[--argc];
 	}
@@ -1286,7 +1300,12 @@ void start_server(int f_in, int f_out, int argc, char *argv[])
 	if (am_daemon && io_timeout && protocol_version >= 31)
 		send_msg_int(MSG_IO_TIMEOUT, io_timeout);
 
+	rprintf(FINFO, "[yee-debug](%s)(main.c->start_server) is_backup = %d, is_recovery = %d\n", who_am_i(), is_backup, is_recovery);
+	rprintf(FINFO, "[yee-debug](%s)(main.c->start_server) backup_version = %s, backup_version_num = %s, backup_type = %s\n", who_am_i(), backup_version, backup_version_num, backup_type);
+
 	if (am_sender) {
+		is_recovery = 1;
+
 		keep_dirlinks = 0; /* Must be disabled on the sender. */
 		if (need_messages_from_generator)
 			io_start_multiplex_in(f_in);
@@ -1295,7 +1314,11 @@ void start_server(int f_in, int f_out, int argc, char *argv[])
 		recv_filter_list(f_in);
 		do_server_sender(f_in, f_out, argc, argv);
 	} else
+	{
+		is_backup = 1;
 		do_server_recv(f_in, f_out, argc, argv);
+	}
+		
 	exit_cleanup(0);
 }
 
@@ -1445,8 +1468,8 @@ static int start_client(int argc, char *argv[])
 	if (!read_batch) { /* for read_batch, NO source is specified */
 		char *path = check_for_hostspec(argv[0], &shell_machine, &rsync_port);
 
-		if (DEBUG_GTE(CMD, 1))
-			rprintf(FINFO, "[debug-yee](%s)(main.c->start_client) path = %s\n", who_am_i(), path);
+		// if (DEBUG_GTE(CMD, 1))
+		// 	rprintf(FINFO, "[debug-yee](%s)(main.c->start_client) path = %s\n", who_am_i(), path);
 
 		if (path) { /* source is remote */
 			char *dummy_host;
@@ -1580,17 +1603,17 @@ static int start_client(int argc, char *argv[])
 		}
 	}
 
-	if(DEBUG_GTE(CMD, 1))
-	{
-		for(int i = 0; i < remote_argc; i++)
-		{
-			rprintf(FINFO, "[debug-yee](%s)(main.c->start_client) pre remote_argv[%d] = %s\n", who_am_i(), i, remote_argv[i]);
-		}
-		for(int i = 0; i < argc; i++)
-		{
-			rprintf(FINFO, "[debug-yee](%s)(main.c->start_client) pre argv[%d] = %s\n", who_am_i(), i, argv[i]);
-		}
-	}
+	// if(DEBUG_GTE(CMD, 1))
+	// {
+	// 	for(int i = 0; i < remote_argc; i++)
+	// 	{
+	// 		rprintf(FINFO, "[debug-yee](%s)(main.c->start_client) pre remote_argv[%d] = %s\n", who_am_i(), i, remote_argv[i]);
+	// 	}
+	// 	for(int i = 0; i < argc; i++)
+	// 	{
+	// 		rprintf(FINFO, "[debug-yee](%s)(main.c->start_client) pre argv[%d] = %s\n", who_am_i(), i, argv[i]);
+	// 	}
+	// }
 
 	// if(is_backup)
 	// {
@@ -1605,17 +1628,17 @@ static int start_client(int argc, char *argv[])
 
 	remote_argv[remote_argc] = NULL;
 	
-	if(DEBUG_GTE(CMD, 1))
-	{
-		for(int i = 0; i < remote_argc; i++)
-		{
-			rprintf(FINFO, "[debug-yee](%s)(main.c->start_client) after remote_argv[%d] = %s\n", who_am_i(), i, remote_argv[i]);
-		}
-		for(int i = 0; i < argc; i++)
-		{
-			rprintf(FINFO, "[debug-yee](%s)(main.c->start_client) after argv[%d] = %s\n", who_am_i(), i, argv[i]);
-		}
-	}
+	// if(DEBUG_GTE(CMD, 1))
+	// {
+	// 	for(int i = 0; i < remote_argc; i++)
+	// 	{
+	// 		rprintf(FINFO, "[debug-yee](%s)(main.c->start_client) after remote_argv[%d] = %s\n", who_am_i(), i, remote_argv[i]);
+	// 	}
+	// 	for(int i = 0; i < argc; i++)
+	// 	{
+	// 		rprintf(FINFO, "[debug-yee](%s)(main.c->start_client) after argv[%d] = %s\n", who_am_i(), i, argv[i]);
+	// 	}
+	// }
 
 	if (rsync_port < 0)
 		rsync_port = RSYNC_PORT;
