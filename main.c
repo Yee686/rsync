@@ -921,8 +921,6 @@ static void do_server_sender(int f_in, int f_out, int argc, char *argv[])
 	{
 		rprintf(FINFO, "[debug-yee](%s)(main.c->do_server_sender) argv[%d] = %s\n", who_am_i(), i, argv[i]);
 	}
-	rprintf(FINFO, "[debug-yee](%s)(main.c->do_server_sender) is_backup = %d, is_recovery = %d\n", who_am_i(), is_backup, is_recovery);
-	rprintf(FINFO, "[debug-yee](%s)(main.c->do_server_sender) backup_version = %s, backup_version_num = %s, backup_type = %s\n", who_am_i(), backup_version, backup_version_num, backup_type);
 
 	if(is_backup)
 	{
@@ -1084,6 +1082,7 @@ static int do_recv(int f_in, int f_out, char *local_name)
 			io_start_buffering_in(f_in);
 		io_start_multiplex_out(f_out);
 
+		rprintf(FINFO, "[debug-yee](%s)(main.c->do_recv)recv_files(%d, %d, %s)\n", f_in, f_out, local_name);
 		recv_files(f_in, f_out, local_name);
 		io_flush(FULL_FLUSH);
 		handle_stats(f_in);
@@ -1165,9 +1164,6 @@ static void do_server_recv(int f_in, int f_out, int argc, char *argv[])
 	{
 		rprintf(FINFO, "[debug-yee](%s)(main.c->do_server_recv) argv[%d] = %s\n", who_am_i(), i, argv[i]);
 	}
-	rprintf(FINFO, "[debug-yee](%s)(main.c->do_server_recv) is_backup = %d, is_recovery = %d\n", who_am_i(), is_backup, is_recovery);
-	rprintf(FINFO, "[debug-yee](%s)(main.c->do_server_recv) backup_version = %s, backup_version_num = %s, backup_type = %s\n", who_am_i(), backup_version, backup_version_num, backup_type);
-
 
 	int exit_code;
 	struct file_list *flist;
@@ -1184,6 +1180,10 @@ static void do_server_recv(int f_in, int f_out, int argc, char *argv[])
 	{
 		recovery_version = argv[--argc];
 	}
+
+	rprintf(FINFO, "[debug-yee](%s)(main.c->do_server_recv) is_backup = %d, is_recovery = %d\n", who_am_i(), is_backup, is_recovery);
+	rprintf(FINFO, "[debug-yee](%s)(main.c->do_server_recv) backup_version = %s, backup_version_num = %s, backup_type = %s\n", who_am_i(), backup_version, backup_version_num, backup_type);
+
 
 	if (filesfrom_fd >= 0 && msgs2stderr != 1 && protocol_version < 31) {
 		/* We can't mix messages with files-from data on the socket,

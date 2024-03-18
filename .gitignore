@@ -58,3 +58,5 @@ aclocal.m4
 /auto-build-save
 .deps
 /*.exe
+/*.o
+dev/test/*

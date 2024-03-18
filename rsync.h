@@ -937,6 +937,16 @@ extern int file_sum_extra_cnt;
 
 #define FLIST_TEMP	(1<<1)
 
+#ifndef MAXBACKUPNUM
+#define MAXBACKUPNUM 100
+#endif
+// 用于备份文件信息的结构体 sender.c receiver.c
+typedef struct backup_files_list
+{
+	char* file_path[MAXBACKUPNUM];
+	int num;
+} backup_files_list;
+
 struct file_list {
 	struct file_list *next, *prev;
 	struct file_struct **files, **sorted;

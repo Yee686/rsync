@@ -67,7 +67,6 @@ extern struct file_list *cur_flist, *first_flist, *dir_flist;
 extern filter_rule_list daemon_filter_list;
 extern OFF_T preallocated_len;
 
-
 extern char *recovery_version; // 用户要恢复的版本号 YYYY-mm-dd-HH:MM:SS 需要传给sender模块恢复至指定版本
 extern char *backup_version;   // 用户指定的的备份版本号 YYYY-mm-dd-HH:MM:SS 需要传给receiver模块恢复至指定版本
 
@@ -76,6 +75,14 @@ extern char *backup_version_num; // 存储端保留的备份版本数目
 
 extern int is_backup;	// 是否是备份操作
 extern int is_recovery; // 是否是恢复操作
+
+int backup_type_flag = -1;		  // 备份类型标志 0:增量备份 1:差量备份
+int backup_version_num_flag = -1; // 存储端保留的备份版本数目
+
+char delta_backup_fpath[MAXPATHLEN]; // 存放备份数据的文件夹
+char delta_backup_fname[MAXPATHLEN]; // 存放对应版本备份数据的文件名
+
+int first_backup = -1; // 是否是第一次备份
 
 extern struct name_num_item *xfer_sum_nni;
 extern int xfer_sum_len;
@@ -321,6 +328,17 @@ static int receive_data(int f_in, char *fname_r, int fd_r, OFF_T size_r,
 		}
 	}
 
+	FILE *delta_fp = NULL;
+	if (is_backup && first_backup == 0)
+	{
+		delta_fp = fopen(delta_backup_fpath, "wb");
+		char file_metadata[2048];
+		sprintf(file_metadata, "[delta file metadata] file_size = %ld, content_size = %ld, block_size = %d, block_count = %d, remainder_block = %d\n",
+				total_size, size_r, sum.blength, sum.count, sum.remainder);
+		rprintf(FINFO, "[yee-%s] receiver.c: file_metadata = %s\n", who_am_i(), file_metadata);
+		fwrite(file_metadata, sizeof(char) * strlen(file_metadata), 1, delta_fp);
+	}
+
 	while ((i = recv_token(f_in, &data)) != 0) {
 		if (INFO_GTE(PROGRESS, 1))
 			show_progress(offset, total_size);
@@ -341,6 +359,29 @@ static int receive_data(int f_in, char *fname_r, int fd_r, OFF_T size_r,
 
 			if (fd != -1 && write_file(fd, 0, offset, data, i) != i)
 				goto report_write_error;
+
+			// 对于backup任务 记录增量信息 -- 写入不匹配的字面量数据
+			if (is_backup && first_backup == 0 && delta_fp != NULL && data != NULL)
+			{
+				char unmatch_info[512];
+				int write_len = -1;
+
+				sprintf(unmatch_info, "unmatch data length = %d, offset = %ld\n", i, offset);
+				write_len = fwrite(unmatch_info, sizeof(char) * strlen(unmatch_info), 1, delta_fp);
+				if (write_len < 1)
+				{
+					rsyserr(FERROR_XFER, errno, "write unmatched length and offset on %s, i am %s\n", full_fname(delta_backup_fname), who_am_i());
+					goto report_write_error;
+				}
+
+				write_len = fwrite(data, 1, i, delta_fp);
+				if (write_len != i)
+				{
+					rsyserr(FERROR_XFER, errno, "write unmatched chunk failed on %s", full_fname(delta_backup_fname));
+					goto report_write_error;
+				}
+			}
+
 			offset += i;
 			continue;
 		}
@@ -377,9 +418,36 @@ static int receive_data(int f_in, char *fname_r, int fd_r, OFF_T size_r,
 		}
 		if (fd != -1 && map && write_file(fd, 0, offset, map, len) != (int)len)
 			goto report_write_error;
+
+		/**
+		 * 匹配的数据,直接记录块号
+		 */
+		if (is_backup && first_backup == 0 && delta_fp != NULL && map != NULL)
+		{
+			int write_len = -1;
+			char match_chunk_id[512];
+
+			sprintf(match_chunk_id, "match token = %d, offset = %ld, offset2 = %ld \n", i, offset, offset2);
+
+			write_len = fwrite(match_chunk_id, sizeof(char) * strlen(match_chunk_id), 1, delta_fp);
+
+			if (write_len != 1)
+			{
+				rsyserr(FERROR_XFER, errno, "write matched token failed on %s", full_fname(fname));
+				goto report_write_error;
+			}
+		}
+
 		offset += len;
 	}
 
+	/*读取结束*/
+	if (is_backup && delta_fp != NULL) {
+		fclose(delta_fp);
+		delta_fp = NULL;
+	}
+
+	/*刷入文件*/
 	if (fd != -1 && offset > 0) {
 		if (sparse_files > 0) {
 			if (sparse_end(fd, offset, updating_basis_or_equiv) != 0)
@@ -422,6 +490,39 @@ static int receive_data(int f_in, char *fname_r, int fd_r, OFF_T size_r,
 	return 1;
 }
 
+// 递归创建目录
+int mkdir_recursive(const char* path, mode_t mode)
+{
+    char tmp[MAXPATHLEN];
+    char* p = NULL;
+    size_t len;
+
+    snprintf(tmp, sizeof(tmp), "%s", path);
+    len = strlen(tmp);
+    if (tmp[len - 1] == '/')
+        tmp[len - 1] = 0;
+    for (p = tmp + 1; *p; p++) {
+        if (*p == '/') {
+            *p = 0;
+            int ret = mkdir(tmp, mode);
+            if (ret != 0 && errno != EEXIST) {
+				rprintf(FWARNING, "[yee-%s] receiver.c: mkdir_recursive mkdir %s failed\n", who_am_i(), tmp);
+                perror("mkdir error");
+                return -1;
+            }
+            *p = '/';
+        }
+    }
+    int ret = mkdir(tmp, mode);
+    if (ret != 0 && errno != EEXIST) {
+		rprintf(FWARNING, "[yee-%s] receiver.c: mkdir_recursive mkdir %s failed\n", who_am_i(), tmp);
+        perror("mkdir error");
+        return -1;
+    }
+
+	rprintf(FINFO, "[debug-yee](%s)(receiver.c->mkdir_recursive) mkdir %s success\n", who_am_i(), tmp);
+    return 0;
+}
 
 static void discard_receive_data(int f_in, struct file_struct *file)
 {
@@ -524,14 +625,252 @@ static int gen_wants_ndx(int desired_ndx, int flist_num)
 	return 0;
 }
 
+// 更新全量版本文件, 即一次拼接, full_file_path 待更新的全量备份文件 delta_file_path 更新使用的增量部分文件
+int update_incre_full_backup(const char* full_file_path, const char* delta_file_path)
+{
+	char updated_full_file_path[MAXPATHLEN];	// 新的全量文件路径
+	char new_timestamp[MAXPATHLEN];				// 新的全量文件的时间戳
+
+	
+	extract_file_name_timestamp(delta_file_path, new_timestamp);
+	rprintf(FWARNING, "[yee-%s] delta_file_path = %s, new_timestamp = %s\n",who_am_i(), delta_file_path, new_timestamp);
+	
+	// 分离目录和文件名
+	char *ptr = strrchr(full_file_path, '/');
+	char dir_name[MAXPATHLEN];				// 目录名 /path/to/fold
+	char file_name[MAXPATHLEN];				// 文件名 filename.delta.timestamp
+	char file_name_row[MAXPATHLEN];			// 文件名 filename
+	if(ptr != NULL)
+	{
+		strncpy(dir_name, full_file_path, ptr - full_file_path);
+		dir_name[ptr - full_file_path] = '\0';
+		strcpy(file_name, ptr + 1);
+	}
+	else
+	{
+		strcpy(dir_name, ".");
+		strcpy(file_name, full_file_path);
+	}
+	// rprintf(FWARNING, "[yee-%s] dir_name = %s, file_name = %s\n",who_am_i(), dir_name, file_name);
+	
+	// 截取.delta.timestamp部分, 获取原始文件名
+	char *dot_pos = strchr(file_name, '.');
+	strlcpy(file_name_row, file_name, dot_pos - file_name + 1);
+	// rprintf(FWARNING, "[yee-%s] dir_name = %s, file_name = %s\n",who_am_i(), dir_name, file_name_row);
+
+	// 构建新的全量文件名
+	sprintf(updated_full_file_path, "%s/%s.full.%s", dir_name, file_name_row, new_timestamp);
+
+	rprintf(FWARNING, "[yee-%s] update backup version: %s -> %s\n", who_am_i(), full_file_path, updated_full_file_path);
+	
+	FILE *delta_file = fopen(delta_file_path, "rb");
+	FILE *updated_full_file = fopen(updated_full_file_path, "wb");
+	int full_fd = do_open(full_file_path, O_RDONLY, 0);
+
+	if(delta_file == NULL || updated_full_file == NULL || full_fd < 0)
+	{
+		rprintf(FWARNING, "[yee-%s] receiver.c: updata_incre_full_backup open file failed\n", who_am_i());
+		rprintf(FWARNING, "[yee-%s] delta_file = %p, updated_full_file = %p, full_fd = %d\n", who_am_i(), delta_file, updated_full_file, full_fd);
+		return -1;
+	}
+
+	char line[1024*100];																	// delta行读取缓冲区
+	int delta_block_length = -1, delta_block_count = -1, delta_remainder_block_length = -1; // delta文件元数据 块大小 块数量 剩余块大小
+	OFF_T total_size = -1, content_size = -1;	// delta文件元数据 偏移量 总大小 内容大小
+
+	// delta 文件元数据解析
+	if(fgets(line, sizeof(line), delta_file) != NULL)	
+	{
+		sscanf(line, "[delta file metadata] file_size = %ld, content_size = %ld, block_size = %d, block_count = %d, remainder_block = %d\n", 
+			&total_size, &content_size, &delta_block_length, &delta_block_count, &delta_remainder_block_length);
+	}	
+	else
+	{
+		rprintf(FWARNING, "[yee-%s] sender.c: make_d2f fgets delta metadata error\n", who_am_i());
+	}
+
+	int32 read_size = MAX(delta_block_length*2, 16*1024);
+	struct map_struct *mapbuf = map_file(full_fd, content_size, read_size, delta_block_length);	// 构建map_struct 以供map_ptr使用
+	// delta 增量信息解析
+	while (fgets(line, sizeof(line), delta_file) != NULL)
+	{ 
+		int token = -1;
+		OFF_T offset = -1, offset2 = -1;
+
+		if(strcmp(line, "\n") == 0 || strcmp(line, "\r\n") == 0)
+		{
+			continue;
+		}
+		else if(strncmp(line, "match token\0", strlen("match token\0")) == 0)	// 解析delta文件中匹配的部分 token
+		{
+			char *map_data = NULL;
+			size_t map_len = -1;
+			sscanf(line, "match token = %d, offset = %ld, offset2 = %ld\n", &token, &offset, &offset2);
+			
+			map_len = delta_block_length;
+			if( token == delta_block_count - 1 && delta_remainder_block_length != 0)
+			{
+				map_len = delta_remainder_block_length;
+			}
+						
+			map_data = map_ptr(mapbuf, offset2, map_len);	// 使用offset2
+
+			if( map_data != NULL && fwrite(map_data, 1, map_len, updated_full_file) != map_len )
+			{
+				rprintf(FWARNING, "[yee-%s] sender.c: make_d2f fwrite match data error\n", who_am_i());
+			}
+		}
+		else if(strncmp(line, "unmatch data length\0", strlen("unmatch data length\0")) == 0) // 解析delta文件中不匹配的部分
+		{
+
+			char unmatch_data[1024*1000];	// 不匹配数据缓冲区
+			size_t unmatch_len = 0;			// 读取长度
+			sscanf(line, "unmatch data length = %ld, offset = %ld\n", &unmatch_len, &offset);
+
+			if( fread(unmatch_data, 1, unmatch_len, delta_file) != unmatch_len )
+			{
+				rprintf(FWARNING, "[yee-%s] sender.c: make_d2f fread unmatch data length error\n", who_am_i());
+			}
+
+			if( fwrite(unmatch_data, 1, unmatch_len, updated_full_file) != unmatch_len ) // 直接将不匹配数据写入
+			{
+				rprintf(FWARNING, "[yee-%s] sender.c: make_d2f fwrite unmatch data length error\n", who_am_i());
+			}
+		}
+		else
+		{
+			rprintf(FWARNING, "[yee-%s] sender.c: make_d2f line: %s is illegal\n", who_am_i(), line);
+		}
+	}
+	fclose(delta_file);
+	fclose(updated_full_file);
+	close(full_fd);
+
+	return 0;
+}
+
+/**管理备份版本 
+ * 函数的参数：backup_path 指定到对应类型的备份路径[dir_name/file.backup/incremental(differential)/]
+ * 所使用的全局变量： backup_type, backup_version_num
+ * */ 
+int manage_backup_version(const char* backup_path)
+{
+	char backup_full_path[MAXPATHLEN];
+	char backup_delta_path[MAXPATHLEN];
+
+	strcpy(backup_full_path, backup_path);
+	strlcat(backup_full_path, "full/", MAXPATHLEN);
+
+	strcpy(backup_delta_path, backup_path);
+	strlcat(backup_delta_path, "delta/", MAXPATHLEN);
+
+	backup_files_list *backup_files_list_full = (backup_files_list*)malloc(sizeof(backup_files_list));
+	backup_files_list *backup_files_list_delta = (backup_files_list*)malloc(sizeof(backup_files_list));
+
+	// rprintf(FWARNING, "[yee-%s] receiver.c: manage_backup_version backup_full_path = %s, backup_delta_path = %s\n", who_am_i(), backup_full_path, backup_delta_path);
+
+	backup_files_list_full->num = read_sort_dir_files(backup_full_path, backup_files_list_full->file_path);
+	backup_files_list_delta->num = read_sort_dir_files(backup_delta_path, backup_files_list_delta->file_path);
+
+	// rprintf(FWARNING, "[yee-%s] receiver.c: full_num = %d, delta_num = %d\n", who_am_i(), backup_files_list_full->num, backup_files_list_delta->num);
+
+	if(backup_files_list_full->num <= backup_version_num && backup_files_list_delta->num <= backup_version_num)
+	{
+		// 版本数目符合要求，不需要其他操作
+		return 0;
+	}
+
+	if(backup_type_flag == 1) // 管理差量备份文件
+	{
+		int i = 0;
+
+		if(backup_files_list_full->num > backup_version_num) 	// 如果全量备份数超过最大值, 删除最旧的全量版本
+		{
+			char full_timestamp_0[MAXPATHLEN], full_timestamp_1[MAXPATHLEN];
+
+			extract_file_name_timestamp(backup_files_list_full->file_path[0], full_timestamp_0);
+			extract_file_name_timestamp(backup_files_list_full->file_path[1], full_timestamp_1);
+
+			remove(backup_files_list_full->file_path[0]);
+
+			for( ; i < backup_files_list_delta->num; i++)	// 删除差量备份文件中对应的全量备份文件, i同时计数
+			{
+				char delta_timestamp[MAXPATHLEN];
+				extract_file_name_timestamp(backup_files_list_delta->file_path[i], delta_timestamp);
+
+				if(strcmp(full_timestamp_1, delta_timestamp) >= 0)
+				{
+					remove(backup_files_list_delta->file_path[i]);
+				}
+				else
+					break;
+			}
+		}
+
+		if(backup_files_list_delta->num - i > backup_version_num)	// 如果差量备份数超过最大值, 删除最旧的差量版本
+		{
+			remove(backup_files_list_delta->file_path[i]);
+		}
+	}
+	else if(backup_type_flag == 0)	// 管理增量备份文件
+	{
+		int i = 0;		// i计数增量备份文件
+		int j = 0;		// j计数全量备份文件
+
+		if(backup_files_list_full->num > backup_version_num) 	// 如果全量备份数超过最大值, 删除最旧的全量版本, 不涉及拼接操作
+		{
+			char full_timestamp_0[MAXPATHLEN], full_timestamp_1[MAXPATHLEN];
+
+			extract_file_name_timestamp(backup_files_list_full->file_path[0], full_timestamp_0);
+			extract_file_name_timestamp(backup_files_list_full->file_path[1], full_timestamp_1);
+
+			remove(backup_files_list_full->file_path[0]);	// 删除最旧的全量版本
+			j = 1;
+
+			for( ; i < backup_files_list_delta->num; i++)	// 删除增量量备份文件无效的增量备份文件, i同时计数
+			{
+				char delta_timestamp[MAXPATHLEN];
+				extract_file_name_timestamp(backup_files_list_delta->file_path[i], delta_timestamp);
+
+				if(strcmp(full_timestamp_1, delta_timestamp) >= 0)
+				{
+					remove(backup_files_list_delta->file_path[i]);
+				}
+				else
+					break;
+			}
+		}
+
+		if((backup_files_list_delta->num) - i > backup_version_num)	// 如果差量备份数超过最大值, 删除最旧的差量版本, 涉及拼接操作
+		{
+			rprintf(FWARNING, "[yee-%s] receiver.c: j = %d, i = %d\n", who_am_i(), j, i);
+			print_backup_files_list(backup_files_list_full);
+			print_backup_files_list(backup_files_list_delta);
+			update_incre_full_backup(backup_files_list_full->file_path[j], backup_files_list_delta->file_path[i]);	// 更新用于比较的上一次全量备份文件
+			remove(backup_files_list_delta->file_path[i]);			// 删除最旧的增量版本
+			remove(backup_files_list_full->file_path[j]);			// 全量版本更新完毕, 删除最旧的全量版本
+		}
+
+	}
+
+	free(backup_files_list_full);
+	free(backup_files_list_delta);
+	return 0;
+}
+
+
 /**
  * main routine for receiver process.
  *
  * Receiver process runs on the same host as the generator process. */
 int recv_files(int f_in, int f_out, char *local_name)
 {
-	rprintf(FINFO, "[debug-yee](%s)(receiver.c->recv_files) is_backup = %d, is_recovery = %d\n",who_am_i(), is_backup, is_recovery);
-	rprintf(FINFO, "[debug-yee](%s)(receiver.c->recv_files) backup_version = %s, backup_type = %s, backup_version_num = %s\n",who_am_i(), backup_version, backup_type, backup_version_num);
+	sscanf(backup_type, "%d", &backup_type_flag);
+	sscanf(backup_version_num, "%d", &backup_version_num_flag);
+
+	rprintf(FINFO, "[debug-yee](%s)(receiver.c->recv_files) is_backup = %d, is_recovery = %d\n", who_am_i(), is_backup, is_recovery);
+	rprintf(FINFO, "[debug-yee](%s)(receiver.c->recv_files) backup_version = %s, backup_type = %s, backup_version_num = %s\n", who_am_i(), backup_version, backup_type, backup_version_num);
+	rprintf(FINFO, "[debug-yee](%s)(receiver.c->recv_files) backup_type_flag = %d, backup_version_num_flag = %d\n", who_am_i(), backup_type_flag, backup_version_num_flag);
 
 	int fd1,fd2;
 	STRUCT_STAT st;
@@ -772,6 +1111,10 @@ int recv_files(int f_in, int f_out, char *local_name)
 				fnamecmp = fname;
 		}
 
+		rprintf(FINFO, "[debug-yee](%s)(receiver.c->recv_files) recv_files() fname = %s\n",who_am_i(), fname);
+		rprintf(FINFO, "[debug-yee](%s)(receiver.c->recv_files) recv_files() fnamecmp = %s\n",who_am_i(), fnamecmp);
+		rprintf(FINFO, "[debug-yee](%s)(receiver.c->recv_files) recv_files() partialptr = %s\n",who_am_i(), partialptr);
+
 		/* open the file */
 		fd1 = do_open(fnamecmp, O_RDONLY, 0);
 
@@ -791,6 +1134,79 @@ int recv_files(int f_in, int f_out, char *local_name)
 				fd1 = do_open(fnamecmp, O_RDONLY, 0);
 			}
 		}
+
+		first_backup = 1;							// 预设为是第一次备份,搜索文件夹存在同名.full.文件则不是第一次备份
+		char full_backup_name_prefix[MAXPATHLEN];	// xxxx.full.
+		char full_backup_fpath[MAXPATHLEN];			// ./path/to/xxxx.backup/incremental(differental)/full/									全量备份完整路径
+		char full_backup_fname[MAXPATHLEN];			// ./path/to/xxxx.backup/incremental(differental)/full/xxxx.full.xxxx-xx-xx-xx:xx:xx	全量备份完整文件名
+
+		strcpy(delta_backup_fpath,"");				// ./path/to/xxxx.backup/incremental(differental)/delta/								增量备份完整路径
+		strcpy(delta_backup_fname,"");				// ./path/to/xxxx.backup/incremental(differental)/delta/xxxx.full.xxxx-xx-xx-xx:xx:xx	增量备份完整文件名
+
+		char dir_name[MAXPATHLEN];					// ./path/to 文件夹名
+		char file_name[MAXNAMLEN];					// xxxx 文件名
+		// char backup_path[MAXPATHLEN];				// ./path/to/incremental(differental)/full/xxxx.backup/ 备份文件夹
+
+		// 备份任务 全量备份文件夹设置
+		if (is_backup)
+		{
+			char *ptr = strrchr(fname, '/');
+
+			if (ptr != NULL)
+			{
+				strncpy(dir_name, fname, ptr - fname);
+				dir_name[ptr - fname] = '\0';
+				strcpy(file_name, ptr + 1);
+			}
+			else
+			{
+				strcpy(dir_name, ".");
+				strcpy(file_name, fname);
+			}
+
+			// xxxx.full.
+			sprintf(full_backup_name_prefix, "%s.full.", file_name);
+
+			// ./path/to/xxxx.backup/incremental(differental)/full/
+			sprintf(full_backup_fpath, "%s/%s.backup/%s/full/", dir_name, file_name, backup_type_flag ? "differential" : "incremental");
+
+			// ./path/to/xxxx.backup/incremental(differental)/delta/
+			sprintf(delta_backup_fpath, "%s/%s.backup/%s/delta/", dir_name, file_name, backup_type_flag ? "differential" : "incremental");
+
+			mkdir_recursive(full_backup_fpath, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
+			mkdir_recursive(delta_backup_fpath, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
+
+			sprintf(full_backup_fname, "%s%s.full.%s", full_backup_fpath, file_name, backup_version);
+			sprintf(delta_backup_fname, "%s%s.delta.%s", delta_backup_fpath, file_name, backup_version);
+
+			int full_prefix_len = strlen(full_backup_name_prefix);
+
+			DIR *dir = opendir(full_backup_fpath);
+			if (dir != NULL)
+			{
+				struct dirent *entry;
+				while ((entry = readdir(dir)) != NULL)
+				{
+
+					if (strncmp(entry->d_name, full_backup_name_prefix, full_prefix_len) == 0)
+					{
+						first_backup = 0;
+						break;
+					}
+				}
+				closedir(dir);
+			}
+			else
+			{
+				rprintf(FWARNING, "[yee-%s] opendir failed\n", who_am_i());
+			}
+		}
+
+		rprintf(FINFO, "[debug-yee](%s)(receiver.c->recv_files) full_backup_name_prefix = %s\n",who_am_i(), full_backup_name_prefix);
+		rprintf(FINFO, "[debug-yee](%s)(receiver.c->recv_files) full_backup_fpath = %s\n",who_am_i(), full_backup_fpath);
+		rprintf(FINFO, "[debug-yee](%s)(receiver.c->recv_files) full_backup_fname = %s\n",who_am_i(), full_backup_fname);
+
+		rprintf(FINFO, "[debug-yee](%s)(receiver.c->recv_files) first_backup = %d\n",who_am_i(), first_backup);
 
 		one_inplace = inplace_partial && fnamecmp_type == FNAMECMP_PARTIAL_DIR;
 		updating_basis_or_equiv = one_inplace
@@ -978,6 +1394,50 @@ int recv_files(int f_in, int f_out, char *local_name)
 			if (inc_recurse)
 				send_msg_int(MSG_NO_SEND, ndx);
 			break;
+		}
+
+		if(is_backup && first_backup == 1)
+		{
+			FILE *full_tmp = fopen(fname,"rb");
+			FILE *full_backup = fopen(full_backup_fname,"wb");
+			
+			if(full_tmp == NULL || full_backup == NULL)
+			{
+				rprintf(FWARNING, "[debug-yee](%s)(receiver.c->recv_files)open %s or %s failed\n", who_am_i(), fname, full_backup_fname);
+			}
+			else
+			{	
+				char buf[1024*100];
+				size_t read_len = 0;
+				size_t buffer_size = sizeof(buf);
+				while((read_len = fread(buf, sizeof(char), buffer_size, full_tmp)) > 0)
+				{
+					rprintf(FWARNING, "[debug-yee](%s)(receiver.c->recv_files)write_full_files write %ld chars to %s\n", who_am_i(), read_len, full_backup_fname);
+					fwrite(buf, sizeof(char), read_len, full_backup);
+					if(read_len < buffer_size)	// 读到了文件末尾
+					{
+						break;
+					}	
+				}
+			}
+
+			fclose(full_tmp);
+			fclose(full_backup);
+
+			full_tmp = NULL;
+			full_backup = NULL;
+		}
+
+		if(is_backup && 0)
+		{
+			char manage_backup_path[MAXPATHLEN];
+			sprintf(manage_backup_path, "%s/%s.backup/%s/", dir_name, file_name, backup_type_flag?"differential":"incremental");
+
+			// rprintf(FWARNING, "[yee-%s] receiver.c: recv_files manage_backup_version %s\n", who_am_i(), manage_backup_path);
+			if(manage_backup_version(manage_backup_path) != 0)
+			{
+				rprintf(FWARNING, "[yee-%s] receiver.c: recv_files manage_backup_version %s failed\n", who_am_i(), manage_backup_path);
+			}
 		}
 	}
 	if (make_backups < 0)

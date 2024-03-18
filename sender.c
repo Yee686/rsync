@@ -69,6 +69,86 @@ int recovery_type = -1;	// 0 使用增量备份文件, 1 使用差量备份文�
 
 BOOL extra_flist_sending_enabled;
 
+// 基于时间戳的比较器
+int compare_delta_file_name(const void *a, const void *b)
+{
+	return strcmp(*(char **)a, *(char **)b);
+}
+
+// 从文件名中提取时间戳
+void extract_file_name_timestamp(const char *file_name, char *timestamp)
+{
+	char *timestamp_start = strrchr(file_name, '.');	// xxxx.full(delta).xxxx-xx-xx-xx:xx:xx
+
+	if (timestamp_start != NULL ) {
+		// rprintf(FWARNING, "[yee-%s] sender.c: extract_file_name_timestamp {%s} time = {%s}\n", who_am_i(), file_name, timestamp_start+1);
+		strcpy(timestamp, timestamp_start+1);
+	}
+	else 
+	{
+		rprintf(FWARNING, "[yee-%s] sender.c: extract_file_name_timestamp fname{%s} is illegal\n", who_am_i(), file_name);
+	}
+}
+
+// 读取path下的所有文件,并按照时间戳排序, dir_name: 文件夹路径, files: 文件名数组
+int read_sort_dir_files(const char* dir_name, char* files[])
+{
+    DIR *dirp = NULL;
+    struct dirent *dp = NULL;
+    int n = 0;
+
+    // 打开目录
+    if ((dirp = opendir(dir_name)) == NULL) {
+		char cwd[4096];
+		getcwd(cwd, sizeof(cwd));
+		rprintf(FWARNING, "[yee-%s] sender.c: read_sort_dir_files opendir() %s error, cwd=%s\n", who_am_i(), dir_name, cwd);
+		return -1;
+    }
+
+    // 统计目录下的文件数
+    while ((dp = readdir(dirp)) != NULL) {
+        if (strcmp(dp->d_name, ".") != 0 && strcmp(dp->d_name, "..") != 0) {
+            n++;
+        }
+    }
+
+    // 重新设置目录位置
+    rewinddir(dirp);
+
+    // 分配动态内存，保存文件名
+    for (int i = 0; i < n; i++) {
+        files[i] = (char *)malloc(MAXPATHLEN * sizeof(char));
+    }
+
+    // 保存文件名到字符串指针数组中
+    int i = 0;
+    while ((dp = readdir(dirp)) != NULL) {
+        if (strcmp(dp->d_name, ".") != 0 && strcmp(dp->d_name, "..") != 0) {
+			strcpy(files[i], dir_name);
+            strcat(files[i], dp->d_name);
+            i++;
+        }
+    }
+
+    // 关闭目录
+    closedir(dirp);
+
+    // 对文件名进行排序
+    qsort(files, n, sizeof(char *), compare_delta_file_name);
+
+    return n;
+}
+
+// 打印备份文件列表
+void print_backup_files_list(const backup_files_list * backup_files)
+{
+	rprintf(FWARNING, "\n[yee-%s] sender.c: print_backup_files_list backup_files->num: %d\n", who_am_i(), backup_files->num);
+	for(int i = 0; i < backup_files->num; i++)
+	{
+		rprintf(FWARNING, "[yee-%s] sender.c: print_backup_files_list backup_files[%d]: %s\n", who_am_i(), i, backup_files->file_path[i]);
+	}
+}
+
 /**
  * @file
  *
@@ -234,11 +314,13 @@ void send_files(int f_in, int f_out)
 	progress_init();
 
 	while (1) {
+		rprintf(FINFO, "[debug-yee](%s)(sender.c->send_files) inc_recurse=%d\n", who_am_i(), inc_recurse);
 		if (inc_recurse) {
 			send_extra_file_list(f_out, MIN_FILECNT_LOOKAHEAD);
 			extra_flist_sending_enabled = !flist_eof;
 		}
 
+		rprintf(FINFO, "[debug-yee](%s)(sender.c->send_files) f_in=%d, f_out=%d, xname=%s\n", who_am_i(), f_in, f_out, xname);
 		/* This call also sets cur_flist. */
 		ndx = read_ndx_and_attrs(f_in, f_out, &iflags, &fnamecmp_type,
 					 xname, &xlen);

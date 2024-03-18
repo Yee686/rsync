@@ -114,6 +114,13 @@ static int need_retouch_dir_times;
 static int need_retouch_dir_perms;
 static const char *solo_file = NULL;
 
+extern int is_backup; 
+extern int is_recovery;
+
+extern char *backup_type;		 // 备份类型 0:增量备份 1:差量备份
+
+int backup_type_flag;
+
 /* Forward declarations. */
 #ifdef SUPPORT_HARD_LINKS
 static void handle_skipped_hlink(struct file_struct *file, int itemizing,
@@ -122,6 +129,55 @@ static void handle_skipped_hlink(struct file_struct *file, int itemizing,
 
 #define EARLY_DELAY_DONE_MSG() (!delay_updates)
 #define EARLY_DELETE_DONE_MSG() (!(delete_during == 2 || delete_after))
+
+int find_newest_full_backup(const char* fname, char* newest_full_backup)
+{
+	char cwd[MAXPATHLEN];
+	getcwd(cwd, MAXPATHLEN);
+
+	// 分离目录名和文件名
+	char *ptr = strrchr(fname, '/');
+	char dir_name[MAXPATHLEN];
+	char file_name[MAXNAMLEN];
+
+	if(ptr != NULL)
+	{
+		strncpy(dir_name, fname, ptr - fname);
+		dir_name[ptr - fname] = '\0';
+		strcpy(file_name, ptr + 1);
+	}
+	else
+	{
+		strcpy(dir_name, ".");
+		strcpy(file_name, fname);
+	}
+
+	char diff_full_backup_path[MAXPATHLEN];
+
+	sprintf(diff_full_backup_path, "%s/%s.backup/differential/full/", dir_name, file_name);
+
+
+	if(access(diff_full_backup_path, F_OK) != 0)
+	{	
+		// 没有差异备份文件夹, 为首次备份, 则直接返回
+		// rprintf(FWARNING, "[yee-%s] generator.c: find_newest_full_backup, first backup for %s\n", who_am_i(), fname);
+		return 1;
+	}
+
+	backup_files_list *differental_full_files = (backup_files_list*)malloc(sizeof(backup_files_list));
+
+	int count = read_sort_dir_files(diff_full_backup_path, differental_full_files->file_path);
+	if(count <= 0)
+	{
+		// rprintf(FERROR, "[yee-%s] generator.c: find_newest_full_backup: read_sort_dir_files error\n", who_am_i());
+		return -1;
+	}
+
+	// print_backup_files_list(differental_full_files);
+
+	strcpy(newest_full_backup, differental_full_files->file_path[count-1]);
+	return 0;
+}
 
 static int start_delete_delay_temp(void)
 {
@@ -1867,6 +1923,32 @@ static void recv_generator(char *fname, struct file_struct *file, int ndx,
 	}
 
 	/* open the file */
+
+	// 如果是备份任务且备份类型为差量备份, 将比对文件定位到最新的全量备份文件
+	
+	rprintf(FINFO, "[debug-yee](%s)generator.c->recv_generator: is_backup:%d, backup_type_flag:%d\n", who_am_i(), is_backup, backup_type_flag);
+	sscanf(backup_type, "%d", &backup_type_flag);
+
+	if (is_backup && backup_type_flag == 1) 
+	{
+		char newest_full_backup[MAXPATHLEN];
+		int ret = (fname, newest_full_backup);
+		if(ret == 0)
+		{
+			strncpy(fnamecmp, newest_full_backup, MAXPATHLEN);
+			// rprintf(FINFO, "[debug-yee](%s)generator.c->recv_generator: find newest full backup success, fname:%s\n",who_am_i(), fname);
+		}
+		else if(ret == -1)
+		{
+			// rprintf(FINFO, "[debug-yee](%s)generator.c->recv_generator: find newest full backup failed, fname:%s\n",who_am_i(), fname);
+			perror("find newest full backup failed");
+		}
+		else if(ret == 1)
+		{
+			rprintf(FINFO, "[debug-yee](%s)generator.c->recv_generator: first backup of:%s\n", who_am_i(), fname);
+		}
+	}
+
 	if (fd < 0 && (fd = do_open(fnamecmp, O_RDONLY, 0)) < 0) {
 		rsyserr(FERROR, errno, "failed to open %s, continuing",
 			full_fname(fnamecmp));

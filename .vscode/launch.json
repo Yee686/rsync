@@ -10,14 +10,14 @@
             "request": "launch",
             "program": "/usr/local/bin/rsync",
             "args": [
-                "-avvv",
-                "/home/yee/rsync/dev/test",
-                "rsync_backup@192.168.114.152::backup/test312/",
-                "--password-file=/rsync.passwd",
+                "-avvvv",
+                "/usr/yzy/rsync/dev/test",
+                "rsync_backup@172.27.11.209::backup/test312/",
+                "--password-file=/rsync.password",
                 "--port=873",
                 "--backup_type=0",
                 "--backup_version_num=10",
-                "--backup_version=2024-03-12-20: 00: 00"
+                "--backup_version=2024-03-18-22:00:00"
             ],
             "stopAtEntry": false,
             "cwd": "${fileDirname}",
