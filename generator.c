@@ -118,8 +118,10 @@ extern int is_backup;
 extern int is_recovery;
 
 extern char *backup_type;		 // 备份类型 0:增量备份 1:差量备份
+// extern char *backup_version_num; //
 
 int backup_type_flag;
+// int backup_version_num_flag;
 
 /* Forward declarations. */
 #ifdef SUPPORT_HARD_LINKS
@@ -132,8 +134,8 @@ static void handle_skipped_hlink(struct file_struct *file, int itemizing,
 
 int find_newest_full_backup(const char* fname, char* newest_full_backup)
 {
-	char cwd[MAXPATHLEN];
-	getcwd(cwd, MAXPATHLEN);
+	// char cwd[MAXPATHLEN];
+	// int ret = getcwd(cwd, MAXPATHLEN);
 
 	// 分离目录名和文件名
 	char *ptr = strrchr(fname, '/');
@@ -1926,21 +1928,21 @@ static void recv_generator(char *fname, struct file_struct *file, int ndx,
 
 	// 如果是备份任务且备份类型为差量备份, 将比对文件定位到最新的全量备份文件
 	
-	rprintf(FINFO, "[debug-yee](%s)generator.c->recv_generator: is_backup:%d, backup_type_flag:%d\n", who_am_i(), is_backup, backup_type_flag);
 	sscanf(backup_type, "%d", &backup_type_flag);
+	rprintf(FINFO, "[debug-yee](%s)generator.c->recv_generator: is_backup:%d, backup_type_flag:%d\n", who_am_i(), is_backup, backup_type_flag);
 
 	if (is_backup && backup_type_flag == 1) 
 	{
 		char newest_full_backup[MAXPATHLEN];
-		int ret = (fname, newest_full_backup);
+		int ret = find_newest_full_backup(fname, newest_full_backup);
 		if(ret == 0)
 		{
 			strncpy(fnamecmp, newest_full_backup, MAXPATHLEN);
-			// rprintf(FINFO, "[debug-yee](%s)generator.c->recv_generator: find newest full backup success, fname:%s\n",who_am_i(), fname);
+			rprintf(FINFO, "[debug-yee](%s)generator.c->recv_generator: find newest full backup success, fname:%s\n",who_am_i(), fname);
 		}
 		else if(ret == -1)
 		{
-			// rprintf(FINFO, "[debug-yee](%s)generator.c->recv_generator: find newest full backup failed, fname:%s\n",who_am_i(), fname);
+			rprintf(FINFO, "[debug-yee](%s)generator.c->recv_generator: find newest full backup failed, fname:%s\n",who_am_i(), fname);
 			perror("find newest full backup failed");
 		}
 		else if(ret == 1)
@@ -2303,6 +2305,9 @@ void check_for_finished_files(int itemizing, enum logcode code, int check_redo)
 
 void generate_files(int f_out, const char *local_name)
 {
+	rprintf(FINFO, "[debug-yee](%s)(%s->%s[%d]) generator building file list, is_backup = %d, is_recovery = %d, backup_type = %s\n",
+			 who_am_i(), __FILE__, __func__, __LINE__, is_backup, is_recovery, backup_type);
+
 	int i, ndx, next_loopchk = 0;
 	char fbuf[MAXPATHLEN];
 	int itemizing;
@@ -2372,6 +2377,7 @@ void generate_files(int f_out, const char *local_name)
 			else
 				f_name(fp, fbuf);
 			ndx = cur_flist->ndx_start - 1;
+			rprintf(FWARNING, "[debug-yee](%s) recv_generator in if\n", who_am_i());
 			recv_generator(fbuf, fp, ndx, itemizing, code, f_out);
 			if (delete_during && dry_run < 2 && !list_only
 			 && !(fp->flags & FLAG_MISSING_DIR)) {
@@ -2402,6 +2408,7 @@ void generate_files(int f_out, const char *local_name)
 				strlcpy(fbuf, solo_file, sizeof fbuf);
 			else
 				f_name(file, fbuf);
+			rprintf(FWARNING, "[debug-yee](%s) recv_generator in for\n", who_am_i());
 			recv_generator(fbuf, file, ndx, itemizing, code, f_out);
 
 			check_for_finished_files(itemizing, code, 0);

@@ -329,7 +329,7 @@ static int receive_data(int f_in, char *fname_r, int fd_r, OFF_T size_r,
 	}
 
 	FILE *delta_fp = NULL;
-	if (is_backup && first_backup == 0)
+	if (is_backup && !first_backup)
 	{
 		delta_fp = fopen(delta_backup_fpath, "wb");
 		char file_metadata[2048];
@@ -346,6 +346,7 @@ static int receive_data(int f_in, char *fname_r, int fd_r, OFF_T size_r,
 		if (allowed_lull)
 			maybe_send_keepalive(time(NULL), MSK_ALLOW_FLUSH | MSK_ACTIVE_RECEIVER);
 
+		// 匹配的数据
 		if (i > 0) {
 			if (DEBUG_GTE(DELTASUM, 3)) {
 				rprintf(FINFO,"data recv %d at %s\n",
@@ -386,6 +387,7 @@ static int receive_data(int f_in, char *fname_r, int fd_r, OFF_T size_r,
 			continue;
 		}
 
+		// 不匹配的数据
 		i = -(i+1);
 		offset2 = i * (OFF_T)sum.blength;
 		len = sum.blength;
@@ -422,7 +424,7 @@ static int receive_data(int f_in, char *fname_r, int fd_r, OFF_T size_r,
 		/**
 		 * 匹配的数据,直接记录块号
 		 */
-		if (is_backup && first_backup == 0 && delta_fp != NULL && map != NULL)
+		if (is_backup && !first_backup && delta_fp != NULL && map != NULL)
 		{
 			int write_len = -1;
 			char match_chunk_id[512];
@@ -751,7 +753,7 @@ int update_incre_full_backup(const char* full_file_path, const char* delta_file_
 
 /**管理备份版本 
  * 函数的参数：backup_path 指定到对应类型的备份路径[dir_name/file.backup/incremental(differential)/]
- * 所使用的全局变量： backup_type, backup_version_num
+ * 所使用的全局变量： backup_type, backup_version_num_flag
  * */ 
 int manage_backup_version(const char* backup_path)
 {
@@ -774,7 +776,7 @@ int manage_backup_version(const char* backup_path)
 
 	// rprintf(FWARNING, "[yee-%s] receiver.c: full_num = %d, delta_num = %d\n", who_am_i(), backup_files_list_full->num, backup_files_list_delta->num);
 
-	if(backup_files_list_full->num <= backup_version_num && backup_files_list_delta->num <= backup_version_num)
+	if(backup_files_list_full->num <= backup_version_num_flag && backup_files_list_delta->num <= backup_version_num_flag)
 	{
 		// 版本数目符合要求，不需要其他操作
 		return 0;
@@ -784,7 +786,7 @@ int manage_backup_version(const char* backup_path)
 	{
 		int i = 0;
 
-		if(backup_files_list_full->num > backup_version_num) 	// 如果全量备份数超过最大值, 删除最旧的全量版本
+		if(backup_files_list_full->num > backup_version_num_flag) 	// 如果全量备份数超过最大值, 删除最旧的全量版本
 		{
 			char full_timestamp_0[MAXPATHLEN], full_timestamp_1[MAXPATHLEN];
 
@@ -807,7 +809,7 @@ int manage_backup_version(const char* backup_path)
 			}
 		}
 
-		if(backup_files_list_delta->num - i > backup_version_num)	// 如果差量备份数超过最大值, 删除最旧的差量版本
+		if(backup_files_list_delta->num - i > backup_version_num_flag)	// 如果差量备份数超过最大值, 删除最旧的差量版本
 		{
 			remove(backup_files_list_delta->file_path[i]);
 		}
@@ -817,7 +819,7 @@ int manage_backup_version(const char* backup_path)
 		int i = 0;		// i计数增量备份文件
 		int j = 0;		// j计数全量备份文件
 
-		if(backup_files_list_full->num > backup_version_num) 	// 如果全量备份数超过最大值, 删除最旧的全量版本, 不涉及拼接操作
+		if(backup_files_list_full->num > backup_version_num_flag) 	// 如果全量备份数超过最大值, 删除最旧的全量版本, 不涉及拼接操作
 		{
 			char full_timestamp_0[MAXPATHLEN], full_timestamp_1[MAXPATHLEN];
 
@@ -841,7 +843,7 @@ int manage_backup_version(const char* backup_path)
 			}
 		}
 
-		if((backup_files_list_delta->num) - i > backup_version_num)	// 如果差量备份数超过最大值, 删除最旧的差量版本, 涉及拼接操作
+		if((backup_files_list_delta->num) - i > backup_version_num_flag)	// 如果差量备份数超过最大值, 删除最旧的差量版本, 涉及拼接操作
 		{
 			rprintf(FWARNING, "[yee-%s] receiver.c: j = %d, i = %d\n", who_am_i(), j, i);
 			print_backup_files_list(backup_files_list_full);
@@ -868,9 +870,12 @@ int recv_files(int f_in, int f_out, char *local_name)
 	sscanf(backup_type, "%d", &backup_type_flag);
 	sscanf(backup_version_num, "%d", &backup_version_num_flag);
 
-	rprintf(FINFO, "[debug-yee](%s)(receiver.c->recv_files) is_backup = %d, is_recovery = %d\n", who_am_i(), is_backup, is_recovery);
-	rprintf(FINFO, "[debug-yee](%s)(receiver.c->recv_files) backup_version = %s, backup_type = %s, backup_version_num = %s\n", who_am_i(), backup_version, backup_type, backup_version_num);
-	rprintf(FINFO, "[debug-yee](%s)(receiver.c->recv_files) backup_type_flag = %d, backup_version_num_flag = %d\n", who_am_i(), backup_type_flag, backup_version_num_flag);
+	rprintf(FINFO, "[debug-yee](%s)(%s->%s[%d]) is_backup = %d, is_recovery = %d\n",
+			who_am_i(), __FILE__, __FUNCTION__, __LINE__, is_backup, is_recovery);
+	rprintf(FINFO, "[debug-yee](%s)(%s->%s[%d]) backup_version = %s, backup_type = %s, backup_version_num = %s\n",
+			who_am_i(), __FILE__, __FUNCTION__, __LINE__, backup_version, backup_type, backup_version_num);
+	rprintf(FINFO, "[debug-yee](%s)(%s->%s[%d]) backup_type_flag = %d, backup_version_num_flag = %d\n",
+			who_am_i(), __FILE__, __FUNCTION__, __LINE__, backup_type_flag, backup_version_num_flag);
 
 	int fd1,fd2;
 	STRUCT_STAT st;
@@ -903,11 +908,15 @@ int recv_files(int f_in, int f_out, char *local_name)
 	progress_init();
 
 	while (1) {
+		rprintf(FINFO, "[debug-yee](%s)(%s->%s[%d]) in reciever main while\n",
+				who_am_i(), __FILE__, __FUNCTION__, __LINE__);
 		cleanup_disable();
 
 		/* This call also sets cur_flist. */
 		ndx = read_ndx_and_attrs(f_in, f_out, &iflags, &fnamecmp_type,
 					 xname, &xlen);
+		rprintf(FINFO, "[debug-yee](%s)(%s->%s[%d]) read ndx = %d\n",
+				who_am_i(), __FILE__, __FUNCTION__, __LINE__, ndx);
 		if (ndx == NDX_DONE) {
 			if (!am_server && cur_flist) {
 				set_current_file_index(NULL, 0);
@@ -1111,29 +1120,12 @@ int recv_files(int f_in, int f_out, char *local_name)
 				fnamecmp = fname;
 		}
 
-		rprintf(FINFO, "[debug-yee](%s)(receiver.c->recv_files) recv_files() fname = %s\n",who_am_i(), fname);
-		rprintf(FINFO, "[debug-yee](%s)(receiver.c->recv_files) recv_files() fnamecmp = %s\n",who_am_i(), fnamecmp);
-		rprintf(FINFO, "[debug-yee](%s)(receiver.c->recv_files) recv_files() partialptr = %s\n",who_am_i(), partialptr);
-
-		/* open the file */
-		fd1 = do_open(fnamecmp, O_RDONLY, 0);
-
-		if (fd1 == -1 && protocol_version < 29) {
-			if (fnamecmp != fname) {
-				fnamecmp = fname;
-				fnamecmp_type = FNAMECMP_FNAME;
-				fd1 = do_open(fnamecmp, O_RDONLY, 0);
-			}
-
-			if (fd1 == -1 && basis_dir[0]) {
-				/* pre-29 allowed only one alternate basis */
-				pathjoin(fnamecmpbuf, sizeof fnamecmpbuf,
-					 basis_dir[0], fname);
-				fnamecmp = fnamecmpbuf;
-				fnamecmp_type = FNAMECMP_BASIS_DIR_LOW;
-				fd1 = do_open(fnamecmp, O_RDONLY, 0);
-			}
-		}
+		rprintf(FINFO, "[debug-yee](%s)((%s->%s[%d]) recv_files() fname = %s\n",
+				who_am_i(), __FILE__, __FUNCTION__, __LINE__, fname);
+		rprintf(FINFO, "[debug-yee](%s)((%s->%s[%d]) recv_files() fnamecmp = %s\n",
+				who_am_i(), __FILE__, __FUNCTION__, __LINE__, fnamecmp);
+		rprintf(FINFO, "[debug-yee](%s)((%s->%s[%d]) recv_files() partialptr = %s\n",
+				who_am_i(), __FILE__, __FUNCTION__, __LINE__, partialptr);
 
 		first_backup = 1;							// 预设为是第一次备份,搜索文件夹存在同名.full.文件则不是第一次备份
 		char full_backup_name_prefix[MAXPATHLEN];	// xxxx.full.
@@ -1202,15 +1194,38 @@ int recv_files(int f_in, int f_out, char *local_name)
 			}
 		}
 
-		rprintf(FINFO, "[debug-yee](%s)(receiver.c->recv_files) full_backup_name_prefix = %s\n",who_am_i(), full_backup_name_prefix);
-		rprintf(FINFO, "[debug-yee](%s)(receiver.c->recv_files) full_backup_fpath = %s\n",who_am_i(), full_backup_fpath);
-		rprintf(FINFO, "[debug-yee](%s)(receiver.c->recv_files) full_backup_fname = %s\n",who_am_i(), full_backup_fname);
-
-		rprintf(FINFO, "[debug-yee](%s)(receiver.c->recv_files) first_backup = %d\n",who_am_i(), first_backup);
+		rprintf(FINFO, "[debug-yee](%s)((%s->%s[%d]) full_backup_name_prefix = %s\n",
+				who_am_i(), __FILE__, __FUNCTION__, __LINE__, full_backup_name_prefix);
+		rprintf(FINFO, "[debug-yee](%s)((%s->%s[%d]) full_backup_fpath = %s\n",
+				who_am_i(), __FILE__, __FUNCTION__, __LINE__, full_backup_fpath);
+		rprintf(FINFO, "[debug-yee](%s)((%s->%s[%d]) full_backup_fname = %s\n",
+				who_am_i(), __FILE__, __FUNCTION__, __LINE__, full_backup_fname);
+		rprintf(FINFO, "[debug-yee](%s)((%s->%s[%d]) first_backup = %d\n",
+				who_am_i(), __FILE__, __FUNCTION__, __LINE__, first_backup);
 
 		one_inplace = inplace_partial && fnamecmp_type == FNAMECMP_PARTIAL_DIR;
 		updating_basis_or_equiv = one_inplace
 		    || (inplace && (fnamecmp == fname || fnamecmp_type == FNAMECMP_BACKUP));
+
+		/* open the file */
+		fd1 = do_open(fnamecmp, O_RDONLY, 0);
+
+		if (fd1 == -1 && protocol_version < 29) {
+			if (fnamecmp != fname) {
+				fnamecmp = fname;
+				fnamecmp_type = FNAMECMP_FNAME;
+				fd1 = do_open(fnamecmp, O_RDONLY, 0);
+			}
+
+			if (fd1 == -1 && basis_dir[0]) {
+				/* pre-29 allowed only one alternate basis */
+				pathjoin(fnamecmpbuf, sizeof fnamecmpbuf,
+					 basis_dir[0], fname);
+				fnamecmp = fnamecmpbuf;
+				fnamecmp_type = FNAMECMP_BASIS_DIR_LOW;
+				fd1 = do_open(fnamecmp, O_RDONLY, 0);
+			}
+		}
 
 		if (fd1 == -1) {
 			st.st_mode = 0;
@@ -1396,7 +1411,7 @@ int recv_files(int f_in, int f_out, char *local_name)
 			break;
 		}
 
-		if(is_backup && first_backup == 1)
+		if(is_backup && first_backup)
 		{
 			FILE *full_tmp = fopen(fname,"rb");
 			FILE *full_backup = fopen(full_backup_fname,"wb");

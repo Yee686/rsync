@@ -385,31 +385,22 @@ int start_inband_exchange(int f_in, int f_out, const char *user, int argc, char 
 		argc--;
 	}
 
-	if (is_recovery == 1 && recovery_version != NULL)		// 还原任务	将还原版本加入参数
+	if ((is_backup == 1 && is_recovery == 1) || (is_backup == 0 && is_recovery == 0))
+	{
+		rprintf(FINFO,"[yee-debug-Error!](%s)(clientserver.c->start_inband_exchange) is_backup = %d, is_recovery = %d\n", who_am_i(), is_backup, is_recovery);
+	}
+	else if (is_recovery == 1 && recovery_version != NULL)		// 还原任务	将还原版本加入参数
 	{
 		sargs[sargc++] = recovery_version;
 	}
-
-	if (is_backup == 1 && backup_version != NULL)		// 备份任务 将备份版本加入参数
+	else if (is_backup == 1 && backup_version != NULL)		// 备份任务 将备份版本加入参数
 	{
 		sargs[sargc++] = backup_type;
 		sargs[sargc++] = backup_version_num;
 		sargs[sargc++] = backup_version;
 	}
 
-	// rprintf(FINFO, "[debug-yee](%s)(clientserver.c->start_inband_exchange) is_backup = %d, is_recovery = %d\n", who_am_i(), is_backup, is_recovery);
-	// rprintf(FINFO, "[debug-yee](%s)(clientserver.c->start_inband_exchange) backup_version = %s, backup_veriosn_num = %s, backup_type = %s\n", who_am_i(), backup_version, backup_version_num, backup_type);
-
 	sargs[sargc] = NULL;
-
-	// if(DEBUG_GTE(CMD, 1))
-	// {
-	// 	rprintf(FINFO, "[yee-debug](%s)(clientserver.c->start_inband_exchange) 处理后 sargc = %d\n", who_am_i(), sargc);
-	// 	for(int i = 0; i < sargc; i++)
-	// 	{
-	// 		rprintf(FINFO, "[yee-debug](%s)(clientserver.c->start_inband_exchange) 处理后  sargv[%d] = %s\n", who_am_i(), i, sargs[i]);
-	// 	}
-	// }
 
 	if (DEBUG_GTE(CMD, 1))
 		print_child_argv("sending daemon args:", sargs);
@@ -1561,6 +1552,7 @@ static void become_daemon(void)
 
 int daemon_main(void)
 {
+	rprintf(FINFO, "rsyncd daemon starting...");
 	if (is_a_socket(STDIN_FILENO)) {
 		int i;
 
@@ -1593,7 +1585,7 @@ int daemon_main(void)
 
 	log_init(0);
 
-	rprintf(FINFO, "rsyncd version %s starting, listening on port %d\n",
+	rprintf(FLOG, "rsyncd version %s starting, listening on port %d\n",
 		rsync_version(), rsync_port);
 	/* TODO: If listening on a particular address, then show that
 	 * address too.  In fact, why not just do getnameinfo on the

@@ -1082,8 +1082,9 @@ static int do_recv(int f_in, int f_out, char *local_name)
 			io_start_buffering_in(f_in);
 		io_start_multiplex_out(f_out);
 
-		rprintf(FINFO, "[debug-yee](%s)(main.c->do_recv)recv_files(%d, %d, %s)\n", f_in, f_out, local_name);
+		rprintf(FINFO, "[debug-yee](%s)(main.c->do_recv)recv_files(%d, %d, %s)\n",who_am_i(), f_in, f_out, local_name);
 		recv_files(f_in, f_out, local_name);
+		rprintf(FINFO, "[debug-yee](%s)(main.c->do_recv)recv_files finished\n", who_am_i());
 		io_flush(FULL_FLUSH);
 		handle_stats(f_in);
 
@@ -1140,8 +1141,10 @@ static int do_recv(int f_in, int f_out, char *local_name)
 			match_hard_links(flist);
 	}
 #endif
-
+	rprintf(FINFO, "[debug-yee](%s)(main.c->do_recv)recv_generator(%d, %d, %s)\n", who_am_i(), f_in, f_out, local_name);
 	generate_files(f_out, local_name);
+	rprintf(FINFO, "[debug-yee](%s)(main.c->do_recv)recv_generator finished\n", who_am_i());
+
 
 	handle_stats(-1);
 	io_flush(FULL_FLUSH);
@@ -1179,6 +1182,11 @@ static void do_server_recv(int f_in, int f_out, int argc, char *argv[])
 	else if (is_recovery)
 	{
 		recovery_version = argv[--argc];
+	}
+
+	for(int i = 0; i < argc; i++)
+	{
+		rprintf(FINFO, "[debug-yee](%s)(main.c->do_server_recv) argv[%d] = %s\n", who_am_i(), i, argv[i]);
 	}
 
 	rprintf(FINFO, "[debug-yee](%s)(main.c->do_server_recv) is_backup = %d, is_recovery = %d\n", who_am_i(), is_backup, is_recovery);
@@ -1300,8 +1308,11 @@ void start_server(int f_in, int f_out, int argc, char *argv[])
 	if (am_daemon && io_timeout && protocol_version >= 31)
 		send_msg_int(MSG_IO_TIMEOUT, io_timeout);
 
-	rprintf(FINFO, "[yee-debug](%s)(main.c->start_server) is_backup = %d, is_recovery = %d\n", who_am_i(), is_backup, is_recovery);
-	rprintf(FINFO, "[yee-debug](%s)(main.c->start_server) backup_version = %s, backup_version_num = %s, backup_type = %s\n", who_am_i(), backup_version, backup_version_num, backup_type);
+	for(int i = 0; i < argc; i++)
+	{
+		rprintf(FINFO, "[debug-yee](%s)(%s->%s[%d]) argv[%d] = %s\n", who_am_i(), __FILE__, __FUNCTION__, __LINE__,  i, argv[i]);
+	}
+	rprintf(FINFO,"[debug-yee](%s)(%s->%s[%d]) backup_version %s, recovery_version %s\n", who_am_i(), __FILE__, __FUNCTION__, __LINE__, backup_version, recovery_version);	
 
 	if (am_sender) {
 		is_recovery = 1;

@@ -3,7 +3,36 @@
     // 悬停以查看现有属性的描述。
     // 欲了解更多信息，请访问: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
+
     "configurations": [
+        {
+            "name": "daemon",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "/usr/local/bin/rsync",
+            "args": [
+                "--daemon",
+                "-vvvvvv",
+                "start"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${fileDirname}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "为 gdb 启用整齐打印",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "将反汇编风格设置为 Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ],
+        },
         {
             "name": "rsync",
             "type": "cppdbg",
@@ -11,13 +40,13 @@
             "program": "/usr/local/bin/rsync",
             "args": [
                 "-avvvv",
-                "/usr/yzy/rsync/dev/test",
-                "rsync_backup@172.27.11.209::backup/test312/",
+                "/usr/yzy/rsync/dev/test/",
+                "rsync_backup@172.31.88.2::backup/test312/",
                 "--password-file=/rsync.password",
                 "--port=873",
                 "--backup_type=0",
                 "--backup_version_num=10",
-                "--backup_version=2024-03-18-22:00:00"
+                "--backup_version=2024-03-20-22:00:00"
             ],
             "stopAtEntry": false,
             "cwd": "${fileDirname}",

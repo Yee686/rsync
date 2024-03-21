@@ -99,9 +99,14 @@ int read_sort_dir_files(const char* dir_name, char* files[])
 
     // 打开目录
     if ((dirp = opendir(dir_name)) == NULL) {
-		char cwd[4096];
-		getcwd(cwd, sizeof(cwd));
-		rprintf(FWARNING, "[yee-%s] sender.c: read_sort_dir_files opendir() %s error, cwd=%s\n", who_am_i(), dir_name, cwd);
+		// char cwd[4096];
+		// if(getcwd(cwd, sizeof(cwd)))
+		// {
+			
+		// }
+		// rprintf(FWARNING, "[yee-%s] sender.c: read_sort_dir_files opendir() %s error, cwd=%s\n", who_am_i(), dir_name, cwd);
+		rprintf(FWARNING, "[yee-%s] sender.c: read_sort_dir_files opendir() %s error\n", who_am_i(), dir_name);
+
 		return -1;
     }
 
@@ -186,7 +191,10 @@ static struct sum_struct *receive_sums(int f)
 	if (s->count == 0)
 		return(s);
 
-	s->sums = new_array(struct sum_buf, s->count);
+	if (!(s->sums = new_array(struct sum_buf, s->count)))
+		out_of_memory("receive_sums");
+
+	// s->sums = new_array(struct sum_buf, s->count);
 
 	for (i = 0; i < s->count; i++) {
 		s->sums[i].sum1 = read_int(f);
@@ -320,14 +328,15 @@ void send_files(int f_in, int f_out)
 			extra_flist_sending_enabled = !flist_eof;
 		}
 
-		rprintf(FINFO, "[debug-yee](%s)(sender.c->send_files) f_in=%d, f_out=%d, xname=%s\n", who_am_i(), f_in, f_out, xname);
 		/* This call also sets cur_flist. */
+		rprintf(FINFO, "[debug-yee](%s)(sender.c->send_files) f_in=%d, f_out=%d, iflags=%d, fnamecmp_type=%d, xname=%s, xlen=%d\n", who_am_i(), f_in, f_out, iflags, fnamecmp_type, xname, xlen);
 		ndx = read_ndx_and_attrs(f_in, f_out, &iflags, &fnamecmp_type,
 					 xname, &xlen);
+		rprintf(FINFO, "[debug-yee](%s)(sender.c->send_files) ndx=%d, iflags=%d, fnamecmp_type=%d, xname=%s, xlen=%d\n\n", who_am_i(), ndx, iflags, fnamecmp_type, xname, xlen);
 		extra_flist_sending_enabled = False;
 
 		if (ndx == NDX_DONE) {
-			if (!am_server && cur_flist) {
+			if (!am_server && INFO_GTE(PROGRESS, 2) && cur_flist) {
 				set_current_file_index(NULL, 0);
 				if (INFO_GTE(PROGRESS, 2))
 					end_progress(0);
@@ -507,7 +516,8 @@ void send_files(int f_in, int f_out)
 				path,slash,fname, big_num(st.st_size));
 		}
 
-		write_ndx_and_attrs(f_out, ndx, iflags, fname, file, fnamecmp_type, xname, xlen);
+		write_ndx_and_attrs(f_out, ndx, iflags, fname, file, 
+							fnamecmp_type, xname, xlen);
 		write_sum_head(f_xfer, s);
 
 		if (DEBUG_GTE(DELTASUM, 2))

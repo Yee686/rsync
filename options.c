@@ -2511,22 +2511,22 @@ int parse_arguments(int *argc_p, const char ***argv_p)
 
 	am_starting_up = 0;
 
-	
+	rprintf(FINFO,"[debug-yee](%s)(%s->%s(%d)) backup_version %s, recovery_version%s\n", who_am_i(), __FILE__, __FUNCTION__, __LINE__, backup_version, recovery_version);	
 	if (backup_version != NULL)
 	{
 		is_backup = 1;
 		if(verbose > 1)
-			rprintf(FINFO,"[debug-yee](%s)(option.c->parse_arguments) backup_version %s\n", who_am_i(), backup_version);
+			rprintf(FINFO,"[debug-yee](%s)(%s->%s(%d)) backup_version %s\n", who_am_i(), __FILE__, __FUNCTION__, __LINE__,  backup_version);
 	}
 	if (recovery_version != NULL)
 	{
 		is_recovery = 1;
 		if(verbose > 1)
-			rprintf(FINFO,"[debug-yee](%s)(option.c->parse_arguments) recovery_version %s\n", who_am_i(), recovery_version);
+			rprintf(FINFO,"[debug-yee](%s)(%s->%s(%d)) recovery_version %s\n", who_am_i(), __FILE__, __FUNCTION__, __LINE__, recovery_version);
 	}
 
 	if(verbose > 1)
-		rprintf(FINFO,"[debug-yee](%s)(option.c->parse_arguments) is_backup %d, is_recovery %d\n", who_am_i(), is_backup, is_recovery);
+		rprintf(FINFO,"[debug-yee](%s)(%s->%s(%d)) is_backup %d, is_recovery %d\n", who_am_i(), __FILE__, __FUNCTION__, __LINE__, is_backup, is_recovery);
 
 	return 1;
 
@@ -2623,14 +2623,14 @@ void server_options(char **args, int *argc_p)
 	char *arg;
 	int i, x;
 
-	if(DEBUG_GTE(CMD, 1))
-	{
-		rprintf(FINFO,"[debug-yee](%s)(option.c->server_options) argc_p %d\n", who_am_i(), *argc_p);
-		for(int i = 0; i < *argc_p; i++)
-		{
-			rprintf(FINFO,"[debug-yee](%s)(option.c->server_options) args[%d] %s\n", who_am_i(), i, args[i]);
-		}
-	}
+	// if(DEBUG_GTE(CMD, 1))
+	// {
+	// 	rprintf(FINFO,"[debug-yee](%s)(option.c->server_options) argc_p %d\n", who_am_i(), *argc_p);
+	// 	for(int i = 0; i < *argc_p; i++)
+	// 	{
+	// 		rprintf(FINFO,"[debug-yee](%s)(option.c->server_options) args[%d] %s\n", who_am_i(), i, args[i]);
+	// 	}
+	// }
 
 	/* This should always remain first on the server's command-line. */
 	args[ac++] = "--server";
@@ -3033,28 +3033,18 @@ void server_options(char **args, int *argc_p)
 			args[ac++] = safe_arg(SPLIT_ARG_WHEN_OLD, remote_options[j]);
 	}
 
-	// if(is_backup)
-	// {
-	// 	args[ac++] = backup_type;
-	// 	args[ac++] = backup_version_num;
-	// 	args[ac++] = backup_version;
-
-	// }
-	// if(is_recovery)
-	// {
-	// 	args[ac++] = recovery_version;
-	// }
-
 	*argc_p = ac;
 
-	if(DEBUG_GTE(CMD, 1))
-	{
-		rprintf(FINFO,"[debug-yee](%s)(option.c->server_options) argc_p %d\n", who_am_i(), *argc_p);
-		for(int i = 0; i < *argc_p; i++)
-		{
-			rprintf(FINFO,"[debug-yee](%s)(option.c->server_options) args[%d] %s\n", who_am_i(), i, args[i]);
-		}
-	}
+	// rprintf(FINFO, "[debug-yee](%s)(%s->%s) is_back %d\n", who_am_i(), __FILE__, __FUNCTION__, *argc_p);
+
+	// if(DEBUG_GTE(CMD, 1))
+	// {
+	// 	rprintf(FINFO,"[debug-yee](%s)(option.c->server_options) argc_p %d\n", who_am_i(), *argc_p);
+	// 	for(int i = 0; i < *argc_p; i++)
+	// 	{
+	// 		rprintf(FINFO,"[debug-yee](%s)(option.c->server_options) args[%d] %s\n", who_am_i(), i, args[i]);
+	// 	}
+	// }
 
 	return;
 
