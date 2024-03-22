@@ -22,6 +22,8 @@
 #include "rsync.h"
 #include "inums.h"
 
+// #define BACKUP_WRITE_VERSION
+
 extern int dry_run;
 extern int do_xfers;
 extern int am_root;
@@ -256,6 +258,8 @@ int open_tmpfile(char *fnametmp, const char *fname, struct file_struct *file)
 static int receive_data(int f_in, char *fname_r, int fd_r, OFF_T size_r,
 			const char *fname, int fd, struct file_struct *file, int inplace_sizing)
 {
+	rprintf(FINFO,"[debug-yee](%s)(%s->%s[%d]) is_backup = %d, first_backup = %d, delta_backup_fpath = %s, delta_backup_fname = %s\n",
+			who_am_i(), __FILE__, __FUNCTION__, __LINE__, is_backup, first_backup, delta_backup_fpath, delta_backup_fname);
 	static char file_sum1[MAX_DIGEST_LEN];
 	struct map_struct *mapbuf;
 	struct sum_struct sum;
@@ -328,16 +332,26 @@ static int receive_data(int f_in, char *fname_r, int fd_r, OFF_T size_r,
 		}
 	}
 
+	// #ifdef BACKUP_WRITE_VERSION
+
 	FILE *delta_fp = NULL;
 	if (is_backup && !first_backup)
 	{
-		delta_fp = fopen(delta_backup_fpath, "wb");
+		delta_fp = fopen(delta_backup_fname, "wb");
+		if (!delta_fp)
+		{
+			rprintf(FINFO, "[debug-yee](%s)(%s->%s[%d]) open %s failed...",
+					who_am_i(), __FILE__, __FUNCTION__, __LINE__, delta_backup_fpath);
+		}
 		char file_metadata[2048];
 		sprintf(file_metadata, "[delta file metadata] file_size = %ld, content_size = %ld, block_size = %d, block_count = %d, remainder_block = %d\n",
 				total_size, size_r, sum.blength, sum.count, sum.remainder);
-		rprintf(FINFO, "[yee-%s] receiver.c: file_metadata = %s\n", who_am_i(), file_metadata);
+		rprintf(FINFO, "[debug-yee](%s)(%s->%s[%d]) file_metadata = %s\n",
+				who_am_i(), __FILE__, __FUNCTION__, __LINE__, file_metadata);
 		fwrite(file_metadata, sizeof(char) * strlen(file_metadata), 1, delta_fp);
 	}
+
+	// #endif
 
 	while ((i = recv_token(f_in, &data)) != 0) {
 		if (INFO_GTE(PROGRESS, 1))
@@ -421,6 +435,7 @@ static int receive_data(int f_in, char *fname_r, int fd_r, OFF_T size_r,
 		if (fd != -1 && map && write_file(fd, 0, offset, map, len) != (int)len)
 			goto report_write_error;
 
+		#ifdef BACKUP_WRITE_VERSION
 		/**
 		 * 匹配的数据,直接记录块号
 		 */
@@ -439,6 +454,7 @@ static int receive_data(int f_in, char *fname_r, int fd_r, OFF_T size_r,
 				goto report_write_error;
 			}
 		}
+		#endif
 
 		offset += len;
 	}
@@ -750,6 +766,7 @@ int update_incre_full_backup(const char* full_file_path, const char* delta_file_
 
 	return 0;
 }
+
 
 /**管理备份版本 
  * 函数的参数：backup_path 指定到对应类型的备份路径[dir_name/file.backup/incremental(differential)/]
@@ -1126,7 +1143,8 @@ int recv_files(int f_in, int f_out, char *local_name)
 				who_am_i(), __FILE__, __FUNCTION__, __LINE__, fnamecmp);
 		rprintf(FINFO, "[debug-yee](%s)((%s->%s[%d]) recv_files() partialptr = %s\n",
 				who_am_i(), __FILE__, __FUNCTION__, __LINE__, partialptr);
-
+		
+		
 		first_backup = 1;							// 预设为是第一次备份,搜索文件夹存在同名.full.文件则不是第一次备份
 		char full_backup_name_prefix[MAXPATHLEN];	// xxxx.full.
 		char full_backup_fpath[MAXPATHLEN];			// ./path/to/xxxx.backup/incremental(differental)/full/									全量备份完整路径
@@ -1139,6 +1157,7 @@ int recv_files(int f_in, int f_out, char *local_name)
 		char file_name[MAXNAMLEN];					// xxxx 文件名
 		// char backup_path[MAXPATHLEN];				// ./path/to/incremental(differental)/full/xxxx.backup/ 备份文件夹
 
+		
 		// 备份任务 全量备份文件夹设置
 		if (is_backup)
 		{
@@ -1193,6 +1212,7 @@ int recv_files(int f_in, int f_out, char *local_name)
 				rprintf(FWARNING, "[yee-%s] opendir failed\n", who_am_i());
 			}
 		}
+		
 
 		rprintf(FINFO, "[debug-yee](%s)((%s->%s[%d]) full_backup_name_prefix = %s\n",
 				who_am_i(), __FILE__, __FUNCTION__, __LINE__, full_backup_name_prefix);
@@ -1202,7 +1222,6 @@ int recv_files(int f_in, int f_out, char *local_name)
 				who_am_i(), __FILE__, __FUNCTION__, __LINE__, full_backup_fname);
 		rprintf(FINFO, "[debug-yee](%s)((%s->%s[%d]) first_backup = %d\n",
 				who_am_i(), __FILE__, __FUNCTION__, __LINE__, first_backup);
-
 		one_inplace = inplace_partial && fnamecmp_type == FNAMECMP_PARTIAL_DIR;
 		updating_basis_or_equiv = one_inplace
 		    || (inplace && (fnamecmp == fname || fnamecmp_type == FNAMECMP_BACKUP));
