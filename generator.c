@@ -122,7 +122,7 @@ extern int is_recovery;
 extern char *backup_type;		 // 备份类型 0:增量备份 1:差量备份
 // extern char *backup_version_num; //
 
-int backup_type_flag;
+int backup_type_flag_generator;
 // int backup_version_num_flag;
 
 /* Forward declarations. */
@@ -1934,10 +1934,10 @@ static void recv_generator(char *fname, struct file_struct *file, int ndx,
 			who_am_i(), __FILE__, __FUNCTION__, __LINE__, is_backup, backup_type);
 	if (is_backup)
 	{
-		sscanf(backup_type, "%d", &backup_type_flag);
-		rprintf(FINFO, "[debug-yee](%s)generator.c->recv_generator: is_backup:%d, backup_type_flag:%d\n", who_am_i(), is_backup, backup_type_flag);
+		sscanf(backup_type, "%d", &backup_type_flag_generator);
+		rprintf(FINFO, "[debug-yee](%s)generator.c->recv_generator: is_backup:%d, backup_type_flag_generator:%d\n", who_am_i(), is_backup, backup_type_flag_generator);
 
-		if (backup_type_flag == 1)
+		if (backup_type_flag_generator == 1)
 		{
 			char newest_full_backup[MAXPATHLEN];
 			int ret = find_newest_full_backup(fname, newest_full_backup);

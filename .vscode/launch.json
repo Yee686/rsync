@@ -12,18 +12,19 @@
             "program": "/usr/local/bin/rsync",
             "args": [
                 "-avvvv",
-                "rsync_backup@172.17.153.80::backup/test312/",
+                "rsync_backup@172.17.160.104::backup/test326/",
                 "/usr/yzy/rsync/dev/recovery_test/",
-                "--password-file=/rsync.password",
+                "--password-file=/home/yzy/rsync.passwd",
                 "--port=873",
                 "--exclude=*.backup*",
-                "--recovery_version=2024-04-26-22:00:00"
+                "--recovery_version=2024-03-20-20:00:00"
             ],
             "stopAtEntry": false,
             "cwd": "${fileDirname}",
             "environment": [],
             "externalConsole": false,
             "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb",
             "setupCommands": [
                 {
                     "description": "为 gdb 启用整齐打印",

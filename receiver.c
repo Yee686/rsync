@@ -258,8 +258,16 @@ int open_tmpfile(char *fnametmp, const char *fname, struct file_struct *file)
 static int receive_data(int f_in, char *fname_r, int fd_r, OFF_T size_r,
 			const char *fname, int fd, struct file_struct *file, int inplace_sizing)
 {
-	rprintf(FINFO,"[debug-yee](%s)(%s->%s[%d]) is_backup = %d, first_backup = %d, delta_backup_fpath = %s, delta_backup_fname = %s\n",
-			who_am_i(), __FILE__, __FUNCTION__, __LINE__, is_backup, first_backup, delta_backup_fpath, delta_backup_fname);
+	if (is_backup)
+	{
+		rprintf(FINFO, "[debug-yee](%s)(%s->%s[%d]) is_backup = %d, first_backup = %d, delta_backup_fpath = %s, delta_backup_fname = %s\n",
+				who_am_i(), __FILE__, __FUNCTION__, __LINE__, is_backup, first_backup, delta_backup_fpath, delta_backup_fname);
+	}
+	else if (is_recovery)
+	{
+		rprintf(FINFO, "[debug-yee](%s)(%s->%s[%d]) recovery_version = %s, fname_r = %s, fname = %s\n",
+				who_am_i(), __FILE__, __FUNCTION__, __LINE__, recovery_version, fname_r, fname);
+	}
 	static char file_sum1[MAX_DIGEST_LEN];
 	struct map_struct *mapbuf;
 	struct sum_struct sum;
@@ -350,6 +358,8 @@ static int receive_data(int f_in, char *fname_r, int fd_r, OFF_T size_r,
 	}
 #endif
 
+	rprintf(FINFO, "[debug-yee](%s)(%s->%s[%d]) start while \n",
+			who_am_i(), __FILE__, __FUNCTION__, __LINE__);
 	while ((i = recv_token(f_in, &data)) != 0) {
 		if (INFO_GTE(PROGRESS, 1))
 			show_progress(offset, total_size);
@@ -357,7 +367,7 @@ static int receive_data(int f_in, char *fname_r, int fd_r, OFF_T size_r,
 		if (allowed_lull)
 			maybe_send_keepalive(time(NULL), MSK_ALLOW_FLUSH | MSK_ACTIVE_RECEIVER);
 
-		// 匹配的数据
+		// i为不匹配的数据长度
 		if (i > 0) {
 			if (DEBUG_GTE(DELTASUM, 3)) {
 				rprintf(FINFO,"data recv %d at %s\n",
@@ -389,6 +399,8 @@ static int receive_data(int f_in, char *fname_r, int fd_r, OFF_T size_r,
 				}
 
 				write_len = fwrite(data, 1, i, delta_fp);
+				// rprintf(FINFO, "[debug-yee](%s)(%s->%s[%d]) write_len = %d, data = %d\n",
+				// 		who_am_i(), __FILE__, __FUNCTION__, __LINE__, write_len, data);
 				if (write_len != i)
 				{
 					rsyserr(FERROR_XFER, errno, "write unmatched chunk failed on %s", full_fname(delta_backup_fname));
@@ -400,7 +412,7 @@ static int receive_data(int f_in, char *fname_r, int fd_r, OFF_T size_r,
 			continue;
 		}
 
-		// 不匹配的数据
+		// i为匹配块号
 		i = -(i+1);
 		offset2 = i * (OFF_T)sum.blength;
 		len = sum.blength;
@@ -408,6 +420,9 @@ static int receive_data(int f_in, char *fname_r, int fd_r, OFF_T size_r,
 			len = sum.remainder;
 
 		stats.matched_data += len;
+
+		// rprintf(FINFO, "[debug-yee](%s)(%s->%s[%d]) i = %d, offset = %ld, offset2 = %ld, len = %d\n",
+		// 		who_am_i(), __FILE__, __FUNCTION__, __LINE__, i, offset, offset2, len);
 
 		if (DEBUG_GTE(DELTASUM, 3)) {
 			rprintf(FINFO,
@@ -504,6 +519,7 @@ static int receive_data(int f_in, char *fname_r, int fd_r, OFF_T size_r,
 		unmap_file(mapbuf);
 
 	read_buf(f_in, sender_file_sum, xfer_sum_len);
+
 	if (DEBUG_GTE(DELTASUM, 2))
 		rprintf(FINFO,"got file_sum\n");
 	if (fd != -1 && memcmp(file_sum1, sender_file_sum, xfer_sum_len) != 0)
@@ -939,8 +955,8 @@ int recv_files(int f_in, int f_out, char *local_name)
 		/* This call also sets cur_flist. */
 		ndx = read_ndx_and_attrs(f_in, f_out, &iflags, &fnamecmp_type,
 					 xname, &xlen);
-		rprintf(FINFO, "[debug-yee](%s)(%s->%s[%d]) read ndx = %d\n",
-				who_am_i(), __FILE__, __FUNCTION__, __LINE__, ndx);
+		// rprintf(FINFO, "[debug-yee](%s)(%s->%s[%d]) read ndx = %d\n",
+		// 		who_am_i(), __FILE__, __FUNCTION__, __LINE__, ndx);
 		if (ndx == NDX_DONE) {
 			if (!am_server && cur_flist) {
 				set_current_file_index(NULL, 0);
@@ -1217,17 +1233,18 @@ int recv_files(int f_in, int f_out, char *local_name)
 			{
 				rprintf(FWARNING, "[yee-%s] opendir failed\n", who_am_i());
 			}
+			rprintf(FINFO, "[debug-yee](%s)((%s->%s[%d]) full_backup_name_prefix = %s\n",
+					who_am_i(), __FILE__, __FUNCTION__, __LINE__, full_backup_name_prefix);
+			rprintf(FINFO, "[debug-yee](%s)((%s->%s[%d]) full_backup_fpath = %s\n",
+					who_am_i(), __FILE__, __FUNCTION__, __LINE__, full_backup_fpath);
+			rprintf(FINFO, "[debug-yee](%s)((%s->%s[%d]) full_backup_fname = %s\n",
+					who_am_i(), __FILE__, __FUNCTION__, __LINE__, full_backup_fname);
+			rprintf(FINFO, "[debug-yee](%s)((%s->%s[%d]) first_backup = %d\n",
+					who_am_i(), __FILE__, __FUNCTION__, __LINE__, first_backup);
 		}
-	#endif
+#endif
 
-		rprintf(FINFO, "[debug-yee](%s)((%s->%s[%d]) full_backup_name_prefix = %s\n",
-				who_am_i(), __FILE__, __FUNCTION__, __LINE__, full_backup_name_prefix);
-		rprintf(FINFO, "[debug-yee](%s)((%s->%s[%d]) full_backup_fpath = %s\n",
-				who_am_i(), __FILE__, __FUNCTION__, __LINE__, full_backup_fpath);
-		rprintf(FINFO, "[debug-yee](%s)((%s->%s[%d]) full_backup_fname = %s\n",
-				who_am_i(), __FILE__, __FUNCTION__, __LINE__, full_backup_fname);
-		rprintf(FINFO, "[debug-yee](%s)((%s->%s[%d]) first_backup = %d\n",
-				who_am_i(), __FILE__, __FUNCTION__, __LINE__, first_backup);
+
 		one_inplace = inplace_partial && fnamecmp_type == FNAMECMP_PARTIAL_DIR;
 		updating_basis_or_equiv = one_inplace
 		    || (inplace && (fnamecmp == fname || fnamecmp_type == FNAMECMP_BACKUP));
