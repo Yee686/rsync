@@ -6,6 +6,38 @@
 
     "configurations": [
         {
+            "name": "recovery",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "/usr/local/bin/rsync",
+            "args": [
+                "-avvvv",
+                "rsync_backup@172.17.153.80::backup/test312/",
+                "/usr/yzy/rsync/dev/recovery_test/",
+                "--password-file=/rsync.password",
+                "--port=873",
+                "--exclude=*.backup*",
+                "--recovery_version=2024-04-26-22:00:00"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${fileDirname}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "为 gdb 启用整齐打印",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "将反汇编风格设置为 Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
             "name": "daemon",
             "type": "cppdbg",
             "request": "launch",
@@ -34,7 +66,7 @@
             ],
         },
         {
-            "name": "rsync",
+            "name": "backup",
             "type": "cppdbg",
             "request": "launch",
             "program": "/usr/local/bin/rsync",

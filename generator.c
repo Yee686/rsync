@@ -24,6 +24,8 @@
 #include "inums.h"
 #include "ifuncs.h"
 
+#define RECOVERY_DEBUG
+
 extern int dry_run;
 extern int do_xfers;
 extern int stdout_format_has_i;
@@ -132,7 +134,7 @@ static void handle_skipped_hlink(struct file_struct *file, int itemizing,
 #define EARLY_DELAY_DONE_MSG() (!delay_updates)
 #define EARLY_DELETE_DONE_MSG() (!(delete_during == 2 || delete_after))
 
-int find_newest_full_backup(const char* fname, char* newest_full_backup)
+static int find_newest_full_backup(const char* fname, char* newest_full_backup)
 {
 	// char cwd[MAXPATHLEN];
 	// int ret = getcwd(cwd, MAXPATHLEN);
@@ -1927,29 +1929,35 @@ static void recv_generator(char *fname, struct file_struct *file, int ndx,
 	/* open the file */
 
 	// 如果是备份任务且备份类型为差量备份, 将比对文件定位到最新的全量备份文件
-	
-	sscanf(backup_type, "%d", &backup_type_flag);
-	rprintf(FINFO, "[debug-yee](%s)generator.c->recv_generator: is_backup:%d, backup_type_flag:%d\n", who_am_i(), is_backup, backup_type_flag);
-
-	if (is_backup && backup_type_flag == 1) 
+	# ifdef RECOVERY_DEBUG
+	rprintf(FINFO, "[debug-yee](%s)(%s-%s[%d]): is_backup:%d, backup_type:%s\n",
+			who_am_i(), __FILE__, __FUNCTION__, __LINE__, is_backup, backup_type);
+	if (is_backup)
 	{
-		char newest_full_backup[MAXPATHLEN];
-		int ret = find_newest_full_backup(fname, newest_full_backup);
-		if(ret == 0)
+		sscanf(backup_type, "%d", &backup_type_flag);
+		rprintf(FINFO, "[debug-yee](%s)generator.c->recv_generator: is_backup:%d, backup_type_flag:%d\n", who_am_i(), is_backup, backup_type_flag);
+
+		if (backup_type_flag == 1)
 		{
-			strncpy(fnamecmp, newest_full_backup, MAXPATHLEN);
-			rprintf(FINFO, "[debug-yee](%s)generator.c->recv_generator: find newest full backup success, fname:%s\n",who_am_i(), fname);
-		}
-		else if(ret == -1)
-		{
-			rprintf(FINFO, "[debug-yee](%s)generator.c->recv_generator: find newest full backup failed, fname:%s\n",who_am_i(), fname);
-			perror("find newest full backup failed");
-		}
-		else if(ret == 1)
-		{
-			rprintf(FINFO, "[debug-yee](%s)generator.c->recv_generator: first backup of:%s\n", who_am_i(), fname);
+			char newest_full_backup[MAXPATHLEN];
+			int ret = find_newest_full_backup(fname, newest_full_backup);
+			if (ret == 0)
+			{
+				strncpy(fnamecmp, newest_full_backup, MAXPATHLEN);
+				rprintf(FINFO, "[debug-yee](%s)generator.c->recv_generator: find newest full backup success, fname:%s\n", who_am_i(), fname);
+			}
+			else if (ret == -1)
+			{
+				rprintf(FINFO, "[debug-yee](%s)generator.c->recv_generator: find newest full backup failed, fname:%s\n", who_am_i(), fname);
+				perror("find newest full backup failed");
+			}
+			else if (ret == 1)
+			{
+				rprintf(FINFO, "[debug-yee](%s)generator.c->recv_generator: first backup of:%s\n", who_am_i(), fname);
+			}
 		}
 	}
+	# endif
 
 	if (fd < 0 && (fd = do_open(fnamecmp, O_RDONLY, 0)) < 0) {
 		rsyserr(FERROR, errno, "failed to open %s, continuing",
@@ -2377,8 +2385,12 @@ void generate_files(int f_out, const char *local_name)
 			else
 				f_name(fp, fbuf);
 			ndx = cur_flist->ndx_start - 1;
-			rprintf(FWARNING, "[debug-yee](%s) recv_generator in if\n", who_am_i());
+
+			rprintf(FINFO, "[debug-yee](%s)(%s-%s[%d])recv_generator in inc_recurse start\n",
+					who_am_i(), __FILE__, __FUNCTION__, __LINE__);
 			recv_generator(fbuf, fp, ndx, itemizing, code, f_out);
+			rprintf(FINFO, "[debug-yee](%s)(%s-%s[%d])recv_generator in inc_recurse finished\n",
+					who_am_i(), __FILE__, __FUNCTION__, __LINE__);
 			if (delete_during && dry_run < 2 && !list_only
 			 && !(fp->flags & FLAG_MISSING_DIR)) {
 				if (fp->flags & FLAG_CONTENT_DIR) {
@@ -2408,8 +2420,12 @@ void generate_files(int f_out, const char *local_name)
 				strlcpy(fbuf, solo_file, sizeof fbuf);
 			else
 				f_name(file, fbuf);
-			rprintf(FWARNING, "[debug-yee](%s) recv_generator in for\n", who_am_i());
+
+			rprintf(FINFO, "[debug-yee](%s)(%s-%s[%d])recv_generator in for loop start\n",
+					who_am_i(), __FILE__, __FUNCTION__, __LINE__);
 			recv_generator(fbuf, file, ndx, itemizing, code, f_out);
+			rprintf(FINFO, "[debug-yee](%s)(%s-%s[%d])recv_generator in for loop finished\n",
+					who_am_i(), __FILE__, __FUNCTION__, __LINE__);
 
 			check_for_finished_files(itemizing, code, 0);
 

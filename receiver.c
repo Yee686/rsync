@@ -22,7 +22,7 @@
 #include "rsync.h"
 #include "inums.h"
 
-// #define BACKUP_WRITE_VERSION
+#define BACKUP_WRITE_VERSION
 
 extern int dry_run;
 extern int do_xfers;
@@ -331,9 +331,7 @@ static int receive_data(int f_in, char *fname_r, int fd_r, OFF_T size_r,
 			exit_cleanup(RERR_FILEIO);
 		}
 	}
-
-	// #ifdef BACKUP_WRITE_VERSION
-
+#ifdef BACKUP_WRITE_VERSION
 	FILE *delta_fp = NULL;
 	if (is_backup && !first_backup)
 	{
@@ -350,8 +348,7 @@ static int receive_data(int f_in, char *fname_r, int fd_r, OFF_T size_r,
 				who_am_i(), __FILE__, __FUNCTION__, __LINE__, file_metadata);
 		fwrite(file_metadata, sizeof(char) * strlen(file_metadata), 1, delta_fp);
 	}
-
-	// #endif
+#endif
 
 	while ((i = recv_token(f_in, &data)) != 0) {
 		if (INFO_GTE(PROGRESS, 1))
@@ -374,14 +371,16 @@ static int receive_data(int f_in, char *fname_r, int fd_r, OFF_T size_r,
 
 			if (fd != -1 && write_file(fd, 0, offset, data, i) != i)
 				goto report_write_error;
-
+		#ifdef BACKUP_WRITE_VERSION
 			// 对于backup任务 记录增量信息 -- 写入不匹配的字面量数据
-			if (is_backup && first_backup == 0 && delta_fp != NULL && data != NULL)
+			if (is_backup && !first_backup && delta_fp != NULL && data != NULL)
 			{
 				char unmatch_info[512];
 				int write_len = -1;
 
 				sprintf(unmatch_info, "unmatch data length = %d, offset = %ld\n", i, offset);
+				// rprintf(FINFO, "[debug-yee](%s)(%s->%s[%d]) unmatch_info =*%s*\n",
+				// 		who_am_i(), __FILE__, __FUNCTION__, __LINE__, unmatch_info);
 				write_len = fwrite(unmatch_info, sizeof(char) * strlen(unmatch_info), 1, delta_fp);
 				if (write_len < 1)
 				{
@@ -396,7 +395,7 @@ static int receive_data(int f_in, char *fname_r, int fd_r, OFF_T size_r,
 					goto report_write_error;
 				}
 			}
-
+		#endif
 			offset += i;
 			continue;
 		}
@@ -435,17 +434,20 @@ static int receive_data(int f_in, char *fname_r, int fd_r, OFF_T size_r,
 		if (fd != -1 && map && write_file(fd, 0, offset, map, len) != (int)len)
 			goto report_write_error;
 
-		#ifdef BACKUP_WRITE_VERSION
 		/**
 		 * 匹配的数据,直接记录块号
 		 */
+		// rprintf(FINFO, "[debug-yee](%s)(%s->%s[%d]) map = %d\n",
+		// 			who_am_i(), __FILE__, __FUNCTION__, __LINE__, strlen(map));
+	#ifdef BACKUP_WRITE_VERSION
 		if (is_backup && !first_backup && delta_fp != NULL && map != NULL)
 		{
 			int write_len = -1;
 			char match_chunk_id[512];
 
 			sprintf(match_chunk_id, "match token = %d, offset = %ld, offset2 = %ld \n", i, offset, offset2);
-
+			// rprintf(FINFO, "[debug-yee](%s)(%s->%s[%d]) match_info =*%s*\n",
+			// 		who_am_i(), __FILE__, __FUNCTION__, __LINE__, match_chunk_id);
 			write_len = fwrite(match_chunk_id, sizeof(char) * strlen(match_chunk_id), 1, delta_fp);
 
 			if (write_len != 1)
@@ -454,16 +456,17 @@ static int receive_data(int f_in, char *fname_r, int fd_r, OFF_T size_r,
 				goto report_write_error;
 			}
 		}
-		#endif
-
+	#endif
 		offset += len;
 	}
 
+	#ifdef BACKUP_WRITE_VERSION
 	/*读取结束*/
 	if (is_backup && delta_fp != NULL) {
 		fclose(delta_fp);
 		delta_fp = NULL;
 	}
+	#endif
 
 	/*刷入文件*/
 	if (fd != -1 && offset > 0) {
@@ -884,8 +887,12 @@ int manage_backup_version(const char* backup_path)
  * Receiver process runs on the same host as the generator process. */
 int recv_files(int f_in, int f_out, char *local_name)
 {
-	sscanf(backup_type, "%d", &backup_type_flag);
-	sscanf(backup_version_num, "%d", &backup_version_num_flag);
+	if(is_backup)
+	{
+		sscanf(backup_type, "%d", &backup_type_flag);
+		sscanf(backup_version_num, "%d", &backup_version_num_flag);
+	}
+	
 
 	rprintf(FINFO, "[debug-yee](%s)(%s->%s[%d]) is_backup = %d, is_recovery = %d\n",
 			who_am_i(), __FILE__, __FUNCTION__, __LINE__, is_backup, is_recovery);
@@ -893,6 +900,8 @@ int recv_files(int f_in, int f_out, char *local_name)
 			who_am_i(), __FILE__, __FUNCTION__, __LINE__, backup_version, backup_type, backup_version_num);
 	rprintf(FINFO, "[debug-yee](%s)(%s->%s[%d]) backup_type_flag = %d, backup_version_num_flag = %d\n",
 			who_am_i(), __FILE__, __FUNCTION__, __LINE__, backup_type_flag, backup_version_num_flag);
+	rprintf(FINFO, "[debug-yee](%s)(%s-%s[%d]) recovery_version = %s\n",
+			who_am_i(), __FILE__, __FUNCTION__, __LINE__, recovery_version);
 
 	int fd1,fd2;
 	STRUCT_STAT st;
@@ -925,8 +934,6 @@ int recv_files(int f_in, int f_out, char *local_name)
 	progress_init();
 
 	while (1) {
-		rprintf(FINFO, "[debug-yee](%s)(%s->%s[%d]) in reciever main while\n",
-				who_am_i(), __FILE__, __FUNCTION__, __LINE__);
 		cleanup_disable();
 
 		/* This call also sets cur_flist. */
@@ -1144,7 +1151,7 @@ int recv_files(int f_in, int f_out, char *local_name)
 		rprintf(FINFO, "[debug-yee](%s)((%s->%s[%d]) recv_files() partialptr = %s\n",
 				who_am_i(), __FILE__, __FUNCTION__, __LINE__, partialptr);
 		
-		
+	
 		first_backup = 1;							// 预设为是第一次备份,搜索文件夹存在同名.full.文件则不是第一次备份
 		char full_backup_name_prefix[MAXPATHLEN];	// xxxx.full.
 		char full_backup_fpath[MAXPATHLEN];			// ./path/to/xxxx.backup/incremental(differental)/full/									全量备份完整路径
@@ -1156,8 +1163,7 @@ int recv_files(int f_in, int f_out, char *local_name)
 		char dir_name[MAXPATHLEN];					// ./path/to 文件夹名
 		char file_name[MAXNAMLEN];					// xxxx 文件名
 		// char backup_path[MAXPATHLEN];				// ./path/to/incremental(differental)/full/xxxx.backup/ 备份文件夹
-
-		
+	#ifdef BACKUP_WRITE_VERSION	
 		// 备份任务 全量备份文件夹设置
 		if (is_backup)
 		{
@@ -1212,7 +1218,7 @@ int recv_files(int f_in, int f_out, char *local_name)
 				rprintf(FWARNING, "[yee-%s] opendir failed\n", who_am_i());
 			}
 		}
-		
+	#endif
 
 		rprintf(FINFO, "[debug-yee](%s)((%s->%s[%d]) full_backup_name_prefix = %s\n",
 				who_am_i(), __FILE__, __FUNCTION__, __LINE__, full_backup_name_prefix);
@@ -1430,6 +1436,7 @@ int recv_files(int f_in, int f_out, char *local_name)
 			break;
 		}
 
+	#ifdef BACKUP_WRITE_VERSION
 		if(is_backup && first_backup)
 		{
 			FILE *full_tmp = fopen(fname,"rb");
@@ -1473,6 +1480,8 @@ int recv_files(int f_in, int f_out, char *local_name)
 				rprintf(FWARNING, "[yee-%s] receiver.c: recv_files manage_backup_version %s failed\n", who_am_i(), manage_backup_path);
 			}
 		}
+	#endif
+
 	}
 	if (make_backups < 0)
 		make_backups = -make_backups;
