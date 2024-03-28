@@ -358,8 +358,8 @@ static int receive_data(int f_in, char *fname_r, int fd_r, OFF_T size_r,
 	}
 #endif
 
-	rprintf(FINFO, "[debug-yee](%s)(%s->%s[%d]) start while \n",
-			who_am_i(), __FILE__, __FUNCTION__, __LINE__);
+	// rprintf(FINFO, "[debug-yee](%s)(%s->%s[%d]) start while \n",
+	// 		who_am_i(), __FILE__, __FUNCTION__, __LINE__);
 	while ((i = recv_token(f_in, &data)) != 0) {
 		if (INFO_GTE(PROGRESS, 1))
 			show_progress(offset, total_size);
@@ -557,7 +557,7 @@ int mkdir_recursive(const char* path, mode_t mode)
         return -1;
     }
 
-	rprintf(FINFO, "[debug-yee](%s)(receiver.c->mkdir_recursive) mkdir %s success\n", who_am_i(), tmp);
+	// rprintf(FINFO, "[debug-yee](%s)(receiver.c->mkdir_recursive) mkdir %s success\n", who_am_i(), tmp);
     return 0;
 }
 
@@ -1160,12 +1160,12 @@ int recv_files(int f_in, int f_out, char *local_name)
 				fnamecmp = fname;
 		}
 
-		rprintf(FINFO, "[debug-yee](%s)((%s->%s[%d]) recv_files() fname = %s\n",
-				who_am_i(), __FILE__, __FUNCTION__, __LINE__, fname);
-		rprintf(FINFO, "[debug-yee](%s)((%s->%s[%d]) recv_files() fnamecmp = %s\n",
-				who_am_i(), __FILE__, __FUNCTION__, __LINE__, fnamecmp);
-		rprintf(FINFO, "[debug-yee](%s)((%s->%s[%d]) recv_files() partialptr = %s\n",
-				who_am_i(), __FILE__, __FUNCTION__, __LINE__, partialptr);
+		// rprintf(FINFO, "[debug-yee](%s)((%s->%s[%d]) recv_files() fname = %s\n",
+		// 		who_am_i(), __FILE__, __FUNCTION__, __LINE__, fname);
+		// rprintf(FINFO, "[debug-yee](%s)((%s->%s[%d]) recv_files() fnamecmp = %s\n",
+		// 		who_am_i(), __FILE__, __FUNCTION__, __LINE__, fnamecmp);
+		// rprintf(FINFO, "[debug-yee](%s)((%s->%s[%d]) recv_files() partialptr = %s\n",
+		// 		who_am_i(), __FILE__, __FUNCTION__, __LINE__, partialptr);
 		
 	
 		first_backup = 1;							// 预设为是第一次备份,搜索文件夹存在同名.full.文件则不是第一次备份
@@ -1233,14 +1233,14 @@ int recv_files(int f_in, int f_out, char *local_name)
 			{
 				rprintf(FWARNING, "[yee-%s] opendir failed\n", who_am_i());
 			}
-			rprintf(FINFO, "[debug-yee](%s)((%s->%s[%d]) full_backup_name_prefix = %s\n",
-					who_am_i(), __FILE__, __FUNCTION__, __LINE__, full_backup_name_prefix);
-			rprintf(FINFO, "[debug-yee](%s)((%s->%s[%d]) full_backup_fpath = %s\n",
-					who_am_i(), __FILE__, __FUNCTION__, __LINE__, full_backup_fpath);
-			rprintf(FINFO, "[debug-yee](%s)((%s->%s[%d]) full_backup_fname = %s\n",
-					who_am_i(), __FILE__, __FUNCTION__, __LINE__, full_backup_fname);
-			rprintf(FINFO, "[debug-yee](%s)((%s->%s[%d]) first_backup = %d\n",
-					who_am_i(), __FILE__, __FUNCTION__, __LINE__, first_backup);
+			// rprintf(FINFO, "[debug-yee](%s)((%s->%s[%d]) full_backup_name_prefix = %s\n",
+			// 		who_am_i(), __FILE__, __FUNCTION__, __LINE__, full_backup_name_prefix);
+			// rprintf(FINFO, "[debug-yee](%s)((%s->%s[%d]) full_backup_fpath = %s\n",
+			// 		who_am_i(), __FILE__, __FUNCTION__, __LINE__, full_backup_fpath);
+			// rprintf(FINFO, "[debug-yee](%s)((%s->%s[%d]) full_backup_fname = %s\n",
+			// 		who_am_i(), __FILE__, __FUNCTION__, __LINE__, full_backup_fname);
+			// rprintf(FINFO, "[debug-yee](%s)((%s->%s[%d]) first_backup = %d\n",
+			// 		who_am_i(), __FILE__, __FUNCTION__, __LINE__, first_backup);
 		}
 #endif
 
@@ -1470,7 +1470,7 @@ int recv_files(int f_in, int f_out, char *local_name)
 				size_t buffer_size = sizeof(buf);
 				while((read_len = fread(buf, sizeof(char), buffer_size, full_tmp)) > 0)
 				{
-					rprintf(FWARNING, "[debug-yee](%s)(receiver.c->recv_files)write_full_files write %ld chars to %s\n", who_am_i(), read_len, full_backup_fname);
+					// rprintf(FWARNING, "[debug-yee](%s)(receiver.c->recv_files)write_full_files write %ld chars to %s\n", who_am_i(), read_len, full_backup_fname);
 					fwrite(buf, sizeof(char), read_len, full_backup);
 					if(read_len < buffer_size)	// 读到了文件末尾
 					{

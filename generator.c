@@ -1930,12 +1930,12 @@ static void recv_generator(char *fname, struct file_struct *file, int ndx,
 
 	// 如果是备份任务且备份类型为差量备份, 将比对文件定位到最新的全量备份文件
 	# ifdef RECOVERY_DEBUG
-	rprintf(FINFO, "[debug-yee](%s)(%s-%s[%d]): is_backup:%d, backup_type:%s\n",
-			who_am_i(), __FILE__, __FUNCTION__, __LINE__, is_backup, backup_type);
+	// rprintf(FINFO, "[debug-yee](%s)(%s-%s[%d]): is_backup:%d, backup_type:%s\n",
+	// 		who_am_i(), __FILE__, __FUNCTION__, __LINE__, is_backup, backup_type);
 	if (is_backup)
 	{
 		sscanf(backup_type, "%d", &backup_type_flag_generator);
-		rprintf(FINFO, "[debug-yee](%s)generator.c->recv_generator: is_backup:%d, backup_type_flag_generator:%d\n", who_am_i(), is_backup, backup_type_flag_generator);
+		// rprintf(FINFO, "[debug-yee](%s)generator.c->recv_generator: is_backup:%d, backup_type_flag_generator:%d\n", who_am_i(), is_backup, backup_type_flag_generator);
 
 		if (backup_type_flag_generator == 1)
 		{
@@ -1944,7 +1944,7 @@ static void recv_generator(char *fname, struct file_struct *file, int ndx,
 			if (ret == 0)
 			{
 				strncpy(fnamecmp, newest_full_backup, MAXPATHLEN);
-				rprintf(FINFO, "[debug-yee](%s)generator.c->recv_generator: find newest full backup success, fname:%s\n", who_am_i(), fname);
+				// rprintf(FINFO, "[debug-yee](%s)generator.c->recv_generator: find newest full backup success, fname:%s\n", who_am_i(), fname);
 			}
 			else if (ret == -1)
 			{
@@ -2421,11 +2421,7 @@ void generate_files(int f_out, const char *local_name)
 			else
 				f_name(file, fbuf);
 
-			rprintf(FINFO, "[debug-yee](%s)(%s-%s[%d])recv_generator in for loop start\n",
-					who_am_i(), __FILE__, __FUNCTION__, __LINE__);
 			recv_generator(fbuf, file, ndx, itemizing, code, f_out);
-			rprintf(FINFO, "[debug-yee](%s)(%s-%s[%d])recv_generator in for loop finished\n",
-					who_am_i(), __FILE__, __FUNCTION__, __LINE__);
 
 			check_for_finished_files(itemizing, code, 0);
 
